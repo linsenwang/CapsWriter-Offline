@@ -205,8 +205,8 @@ class LLMFileWatcher(FileSystemEventHandler):
         """启动监控"""
         # 监控 LLM 目录
         self.observer.schedule(self, str(self.llm_dir), recursive=False)
-        # 同时也监控 Base 目录（为了 hot files），non-recursive
-        self.observer.schedule(self, str(self.base_dir), recursive=False)
+        # 注意：不再监控 Base 目录，因为 hot-rectify.txt 等由热词 watchdog 统一管理，
+        # 且 macOS FSEvents 不允许对同一路径重复添加 watch，会导致 RuntimeError
         
         self.observer.start()
         logger.info("LLM 文件监控已启动")

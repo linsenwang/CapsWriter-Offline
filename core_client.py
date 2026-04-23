@@ -28,6 +28,16 @@ from util.logger import setup_logger
 from util.common.lifecycle import lifecycle
 from util.client.cleanup import cleanup_client_resources, request_exit_from_tray
 
+# 防止 HTTP 代理干扰 WebSocket 局域网连接
+# 某些代理工具（Clash/V2Ray 等）会拦截所有 TCP 流量，导致 websockets.connect() 超时
+_no_proxy_val = os.environ.get('NO_PROXY', '') or os.environ.get('no_proxy', '')
+_no_proxy_list = [a.strip() for a in _no_proxy_val.split(',') if a.strip()]
+_no_proxy_add = [a for a in (Config.addr, 'localhost', '127.0.0.1', '::1') if a not in _no_proxy_list]
+if _no_proxy_add:
+    _no_proxy_val += (',' if _no_proxy_val else '') + ','.join(_no_proxy_add)
+    os.environ['NO_PROXY'] = _no_proxy_val
+    os.environ['no_proxy'] = _no_proxy_val
+
 # 确保根目录位置正确，用相对路径加载模型
 BASE_DIR = os.path.dirname(__file__)
 os.chdir(BASE_DIR)
