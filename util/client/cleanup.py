@@ -72,6 +72,14 @@ def cleanup_client_resources():
     except Exception as e:
         logger.warning(f"重置状态时发生错误: {e}")
 
+    # 停止空闲监控
+    if hasattr(state, 'idle_monitor') and state.idle_monitor:
+        try:
+            state.idle_monitor.stop()
+            logger.debug("空闲监控已停止")
+        except Exception as e:
+            logger.warning(f"停止空闲监控时发生错误: {e}")
+
     # 停止托盘图标
     try:
         from util.client.ui import stop_tray

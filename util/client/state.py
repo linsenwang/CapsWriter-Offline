@@ -79,6 +79,9 @@ class ClientState:
     # 定期刷新状态文件的异步任务
     _status_refresh_task: Optional[asyncio.Task] = None
     
+    # 最后活动时间戳（用于空闲自动退出）
+    last_activity_time: float = field(default_factory=time.time)
+    
     def initialize(self) -> None:
         """
         初始化状态
@@ -226,6 +229,15 @@ class ClientState:
             logger.debug(f"获取音频文件: task_id={task_id}, path={file_path}")
         return file_path
 
+    def update_activity(self) -> None:
+        """
+        更新最后活动时间
+        
+        在录音开始、结束、收到 UDP 命令等操作时调用，
+        防止空闲监控器误判为空闲而自动退出。
+        """
+        self.last_activity_time = time.time()
+    
     def set_output_text(self, text: str) -> None:
         """
         设置最近一次输出文本并通过 UDP 广播（如果启用）

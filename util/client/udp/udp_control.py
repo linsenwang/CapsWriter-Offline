@@ -94,12 +94,32 @@ class UDPController:
         处理接收到的命令
 
         Args:
-            command: 命令字符串 (START/STOP)
+            command: 命令字符串 (START/STOP/PING)
             addr: 发送方地址
         """
         state = self.manager.state
+        
+        # 任何 UDP 命令都视为活动，更新最后活动时间
+        state.update_activity()
+
+        if command == 'PING':
+            # 响应心跳检测，用于外部工具（如 Hammerspoon）判断客户端是否在线
+            try:
+                self._sock.sendto(b'PONG', addr)
+                logger.debug(f"UDP 控制：响应 PING (来自 {addr[0]}:{addr[1]})")
+            except Exception as e:
+                logger.warning(f"UDP 控制：PING 响应失败: {e}")
+            return
 
         if command == 'START':
+            # 如果麦克风因空闲被释放，先重新打开音频流
+            if state.stream is None and state.stream_manager:
+                logger.info("UDP 控制：麦克风已释放，正在重新打开...")
+                stream = state.stream_manager.open()
+                if stream is None:
+                    logger.error("UDP 控制：重新打开麦克风失败")
+                    return
+
             if not state.recording:
                 logger.info(f"UDP 控制：开始录音 (来自 {addr[0]}:{addr[1]})")
                 # 使用第一个可用的快捷键任务启动录音

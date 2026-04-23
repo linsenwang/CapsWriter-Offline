@@ -148,6 +148,13 @@ def setup_client_components(base_dir):
         state.udp_controller = udp_controller
         udp_controller.start()
 
+    # 8. 空闲监控（自动退出以节省内存）
+    if Config.idle_exit_enabled and Config.idle_timeout > 0:
+        from util.client.idle_monitor import IdleMonitor
+        idle_monitor = IdleMonitor(state)
+        state.idle_monitor = idle_monitor
+        idle_monitor.start()
+
     # 9. 内存清理
     if system() == 'Windows':
         empty_current_working_set()

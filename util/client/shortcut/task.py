@@ -65,6 +65,16 @@ class ShortcutTask:
 
     def launch(self) -> None:
         """启动录音任务"""
+        self.state.update_activity()
+
+        # 如果麦克风因空闲被释放，先重新打开音频流
+        if self.state.stream is None and self.state.stream_manager:
+            logger.info("麦克风已释放，正在重新打开...")
+            stream = self.state.stream_manager.open()
+            if stream is None:
+                logger.error("重新打开麦克风失败，无法开始录音")
+                return
+
         logger.info(f"[{self.shortcut.key}] 触发：开始录音")
 
         # 记录开始时间
@@ -92,6 +102,7 @@ class ShortcutTask:
 
     def cancel(self) -> None:
         """取消录音任务（时间过短）"""
+        self.state.update_activity()
         logger.debug(f"[{self.shortcut.key}] 取消录音任务（时间过短）")
 
         self.is_recording = False
@@ -103,6 +114,7 @@ class ShortcutTask:
 
     def finish(self) -> None:
         """完成录音任务"""
+        self.state.update_activity()
         logger.info(f"[{self.shortcut.key}] 释放：完成录音")
 
         self.is_recording = False

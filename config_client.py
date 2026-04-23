@@ -72,6 +72,10 @@ class ClientConfig:
     udp_control_addr = '127.0.0.1'  # UDP 控制监听地址（'0.0.0.0' 允许外部访问）
     udp_control_port = 6018         # UDP 控制监听端口
 
+    idle_exit_enabled = True        # 是否启用空闲自动释放麦克风
+    idle_timeout = 1                # 空闲超时时间（秒），超过此时间无操作则释放麦克风
+    idle_check_interval = 1         # 空闲检查间隔（秒），建议设为 1~5 秒
+
 
 # 快捷键配置说明
 r"""
