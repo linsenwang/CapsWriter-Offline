@@ -78,6 +78,7 @@ class ShortcutManager:
     def _init_tasks(self) -> None:
         """初始化所有快捷键任务"""
         from config_client import ClientConfig as Config
+        from util.client.shortcut.shortcut_config import Shortcut
 
         for shortcut in self.shortcuts:
             if not shortcut.enabled:
@@ -88,6 +89,23 @@ class ShortcutManager:
             task.pool = self._pool
             task.threshold = shortcut.get_threshold(Config.threshold)
             self.tasks[shortcut.key] = task
+
+        # 如果启用了 UDP 控制但没有可用的任务，创建一个虚拟任务供 UDP 使用
+        # 这样即使 shortcuts 为空，Hammerspoon/UDP 方案也能正常工作
+        if not self.tasks and Config.udp_control:
+            dummy = Shortcut(
+                key='__udp__',
+                type='keyboard',
+                suppress=False,
+                hold_mode=True,
+                enabled=True
+            )
+            task = ShortcutTask(dummy, self.state)
+            task._manager_ref = lambda: self
+            task.pool = self._pool
+            task.threshold = Config.threshold
+            self.tasks['__udp__'] = task
+            logger.debug("UDP 控制已启用但未配置快捷键，创建虚拟任务供 UDP 控制器使用")
 
     # ========== Windows 监听器创建 ==========
 

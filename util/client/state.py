@@ -76,6 +76,9 @@ class ClientState:
     # 最近一次输出内容（如果是 LLM 润色，则是润色结果；否则是原始识别结果）
     last_output_text: Optional[str] = None
     
+    # 定期刷新状态文件的异步任务
+    _status_refresh_task: Optional[asyncio.Task] = None
+    
     def initialize(self) -> None:
         """
         初始化状态
@@ -85,6 +88,10 @@ class ClientState:
         self.loop = asyncio.get_event_loop()
         self.queue_in = asyncio.Queue()
         self.queue_out = asyncio.Queue()
+        # 写入状态文件，让外部工具（如 SwiftBar）知道客户端已在线
+        self._write_status_file()
+        # 启动定期刷新任务，防止 SwiftBar 因超时而显示离线
+        self._status_refresh_task = self.loop.create_task(self._status_refresh_loop())
         logger.debug("客户端状态已初始化")
     
     def reset(self) -> None:
@@ -118,8 +125,27 @@ class ClientState:
         self.recording_start_time = 0.0
         self.audio_files.clear()
         
+        # 取消状态刷新任务
+        if self._status_refresh_task is not None:
+            try:
+                self._status_refresh_task.cancel()
+            except Exception:
+                pass
+            self._status_refresh_task = None
+        
         logger.debug("客户端状态重置完成")
     
+    async def _status_refresh_loop(self) -> None:
+        """定期刷新状态文件，让 SwiftBar 等外部工具知道客户端仍在运行"""
+        while True:
+            try:
+                await asyncio.sleep(10)
+                self._write_status_file()
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                pass
+
     def _write_status_file(self) -> None:
         """将当前状态写入状态文件，供外部工具（如 SwiftBar）读取"""
         import json
@@ -131,8 +157,9 @@ class ClientState:
                 "timestamp": time.time(),
             }
             status_path.write_text(json.dumps(status), encoding="utf-8")
-        except Exception:
-            pass
+            logger.debug(f"已写入状态文件: {status_path}")
+        except Exception as e:
+            logger.warning(f"写入状态文件失败: {e}")
 
     def start_recording(self, start_time: float) -> None:
         """

@@ -16,9 +16,9 @@ class ClientConfig:
 
     # 快捷键配置列表
     shortcuts = [
-        # 鼠标侧键由 Hammerspoon 监听并发送 UDP 触发，避免 pynput 对 macOS 鼠标支持不佳的问题
+        # 所有快捷键均由 Hammerspoon 监听并发送 UDP 触发，绕过 pynput 在 macOS 上的限制
         # {'key': 'middle', 'type': 'mouse', 'suppress': True, 'hold_mode': True, 'enabled': True, 'mouse_button': 'x2'},
-        {'key': 'f5', 'type': 'keyboard', 'suppress': True, 'hold_mode': True, 'enabled': True},
+        # {'key': 'f5', 'type': 'keyboard', 'suppress': True, 'hold_mode': True, 'enabled': True},
     ]
 
     threshold    = 0.3          # 快捷键触发阈值（秒）
