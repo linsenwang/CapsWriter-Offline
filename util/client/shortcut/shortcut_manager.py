@@ -206,10 +206,12 @@ class ShortcutManager:
     def _on_click(self, x, y, button, pressed) -> None:
         """鼠标点击回调（macOS/Linux）"""
         # 映射 pynput 鼠标按钮到我们的名称
-        button_map = {
-            mouse.Button.x1: 'x1',
-            mouse.Button.x2: 'x2',
-        }
+        # macOS 上 pynput 的 Button 枚举没有 x1/x2，只有 left/middle/right/unknown
+        button_map = {}
+        if hasattr(mouse.Button, 'x1'):
+            button_map[mouse.Button.x1] = 'x1'
+        if hasattr(mouse.Button, 'x2'):
+            button_map[mouse.Button.x2] = 'x2'
         button_name = button_map.get(button)
         if button_name is None:
             return

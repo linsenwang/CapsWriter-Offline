@@ -11,13 +11,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 客户端配置
 class ClientConfig:
-    addr = '127.0.0.1'          # Server 地址
+    addr = '192.168.1.116'      # Server 地址
     port = '6016'               # Server 端口
 
     # 快捷键配置列表
     shortcuts = [
         {
-            'key': 'caps_lock',     # 监听大写锁定键
+            'key': 'f5',            # 监听 F5（Dictation）键
             'type': 'keyboard',     # 是键盘快捷键
             'suppress': True,      # 不阻塞按键（但录音结束会补发）
             'hold_mode': True,      # 长按模式
