@@ -317,11 +317,9 @@ class ResultProcessor:
             await self._text_output.output(text, paste=paste)
             get_state().set_output_text(text)
 
-        # 保存录音与写入 md 文件
+        # 保存录音文件
         file_audio = None
         if Config.save_audio:
-            from util.client.diary.diary_writer import DiaryWriter
-
             # 重命名音频文件
             file_path = self.state.pop_audio_file(message['task_id'])
             if file_path:
@@ -331,10 +329,12 @@ class ResultProcessor:
                 file_audio = file_manager.rename(text, message['time_start'])
                 logger.debug(f"保存录音文件: {file_audio}")
 
-            # 写入日记
+        # 保存转录结果到日记文件 (独立开关，不依赖 save_audio)
+        if Config.save_transcript:
+            from util.client.diary.diary_writer import DiaryWriter
             diary_writer = DiaryWriter()
             diary_writer.write(text, message['time_start'], file_audio)
-            logger.debug("写入 MD 文件")
+            logger.debug("写入 MD 日记文件")
 
         # LLM 结果显示和保存
         if Config.llm_enabled and llm_result and llm_result.processed:
