@@ -120,6 +120,20 @@ class ClientState:
         
         logger.debug("客户端状态重置完成")
     
+    def _write_status_file(self) -> None:
+        """将当前状态写入状态文件，供外部工具（如 SwiftBar）读取"""
+        import json
+        status_path = Path(__file__).parent.parent.parent / "status.json"
+        try:
+            status = {
+                "recording": self.recording,
+                "recording_start_time": self.recording_start_time,
+                "timestamp": time.time(),
+            }
+            status_path.write_text(json.dumps(status), encoding="utf-8")
+        except Exception:
+            pass
+
     def start_recording(self, start_time: float) -> None:
         """
         开始录音
@@ -129,6 +143,7 @@ class ClientState:
         """
         self.recording = True
         self.recording_start_time = start_time
+        self._write_status_file()
         logger.debug(f"录音状态已更新: recording=True, start_time={start_time:.2f}")
     
     def stop_recording(self) -> float:
@@ -144,6 +159,7 @@ class ClientState:
         
         self.recording = False
         self.recording_start_time = 0.0
+        self._write_status_file()
         logger.debug(f"录音状态已更新: recording=False, duration={duration:.2f}s")
         return duration
     
