@@ -3,7 +3,7 @@ sherpa-onnx
 numpy
 gguf
 onnxruntime-directml; platform_system=='Windows'
-onnxruntime; platform_system=='Darwin'
+onnxruntime; platform_system=='Darwin' or platform_system=='Linux'
 
 # basic
 rich
