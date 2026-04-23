@@ -6,12 +6,10 @@ import signal
 import atexit
 from platform import system
 from config_server import ServerConfig as Config
-from config_server import ParaformerArgs, ModelPaths, SenseVoiceArgs, FunASRNanoGGUFArgs, Qwen3ASRGGUFArgs
+from config_server import ParaformerArgs, ModelPaths, SenseVoiceArgs, FunASRNanoGGUFArgs, Qwen3ASRGGUFArgs, Qwen3ASRHFArgs
 from util.server.server_check_model import check_model
 from util.server.server_cosmic import console
 from util.server.server_recognize import recognize
-from util.fun_asr_gguf import create_asr_engine as create_fun_asr_engine
-from util.qwen_asr_gguf import create_asr_engine as create_qwen_asr_engine
 from util.tools.empty_working_set import empty_current_working_set
 
 from . import logger
@@ -65,11 +63,12 @@ def init_recognizer(queue_in: Queue, queue_out: Queue, sockets_id, stdin_fn):
     # 注册 atexit 处理器
     atexit.register(cleanup_recognizer_resources)
 
-    # 导入模块
-    with console.status("载入模块中…", spinner="bouncingBall", spinner_style="yellow"):
-        import sherpa_onnx
-    console.print('[green4]模块加载完成', end='\n\n')
-    logger.info("Sherpa-ONNX 模块加载完成")
+    # 导入模块（仅 sherpa-onnx 后端需要）
+    if Config.model_type.lower() in ('sensevoice', 'paraformer'):
+        with console.status("载入模块中…", spinner="bouncingBall", spinner_style="yellow"):
+            import sherpa_onnx
+        console.print('[green4]模块加载完成', end='\n\n')
+        logger.info("Sherpa-ONNX 模块加载完成")
 
     # 载入语音模型
     console.print('[yellow]语音模型载入中', end='\r'); t1 = time.time()
@@ -86,16 +85,21 @@ def init_recognizer(queue_in: Queue, queue_out: Queue, sockets_id, stdin_fn):
     try:
         if model_type == 'fun_asr_nano':
             logger.debug("使用 Fun-ASR-Nano 模型")
-            # recognizer = sherpa_onnx.OfflineRecognizer.from_funasr_nano(
-            #     **{key: value for key, value in FunASRNanoArgs.__dict__.items() if not key.startswith('_')}
-            # )
+            from util.fun_asr_gguf import create_asr_engine as create_fun_asr_engine
             recognizer = create_fun_asr_engine(
                 **{key: value for key, value in FunASRNanoGGUFArgs.__dict__.items() if not key.startswith('_')}
             )
         elif model_type == 'qwen_asr':
-            logger.debug("使用 Qwen-ASR 模型")
+            logger.debug("使用 Qwen-ASR 模型 (GGUF)")
+            from util.qwen_asr_gguf import create_asr_engine as create_qwen_asr_engine
             recognizer = create_qwen_asr_engine(
                 **{key: value for key, value in Qwen3ASRGGUFArgs.__dict__.items() if not key.startswith('_')}
+            )
+        elif model_type == 'qwen_asr_hf':
+            logger.debug("使用 Qwen-ASR 模型 (HuggingFace)")
+            from util.qwen_asr_hf import create_asr_engine as create_qwen_asr_hf_engine
+            recognizer = create_qwen_asr_hf_engine(
+                **{key: value for key, value in Qwen3ASRHFArgs.__dict__.items() if not key.startswith('_')}
             )
         elif model_type == 'sensevoice':
             import sherpa_onnx
@@ -110,7 +114,7 @@ def init_recognizer(queue_in: Queue, queue_out: Queue, sockets_id, stdin_fn):
                 **{key: value for key, value in ParaformerArgs.__dict__.items() if not key.startswith('_')}
             )
         else:
-            error_msg = f"不支持的模型类型: {Config.model_type}，请选择 'fun_asr_nano'、'sensevoice' 或 'paraformer'"
+            error_msg = f"不支持的模型类型: {Config.model_type}，请选择 'fun_asr_nano'、'qwen_asr'、'qwen_asr_hf'、'sensevoice' 或 'paraformer'"
             logger.error(error_msg)
             raise ValueError(error_msg)
     except Exception as e:

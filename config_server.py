@@ -13,8 +13,10 @@ class ServerConfig:
     addr = '0.0.0.0'
     port = '6016'
 
-    # 语音模型选择：'fun_asr_nano', 'sensevoice', 'paraformer', 'qwen_asr'
-    model_type = 'qwen_asr'
+    # 语音模型选择：'fun_asr_nano', 'sensevoice', 'paraformer', 'qwen_asr', 'qwen_asr_hf'
+    #   - qwen_asr     : 使用 GGUF + ONNX 本地推理（需下载转换后的模型）
+    #   - qwen_asr_hf  : 使用 qwen-asr 包 + HuggingFace 原始权重（支持 transformers / vLLM 后端）
+    model_type = 'qwen_asr_hf'
 
     format_num = True       # 输出时是否将中文数字转为阿拉伯数字
     format_spell = True     # 输出时是否调整中英之间的空格
@@ -138,5 +140,28 @@ class Qwen3ASRGGUFArgs:
     n_ctx = 2048                # 上下文窗口大小
     chunk_size = 80.0           # 分段长度（秒）
     pad_to = 30                 # 开启 DirectML 加速时，短音频统一填充到指定长度，有加速效果
+    verbose = False
+
+
+class Qwen3ASRHFArgs:
+    """Qwen3-ASR HuggingFace 原始权重模型参数配置（qwen-asr 包后端）"""
+
+    # 模型路径：可以是 HuggingFace 模型 ID，也可以是本地绝对路径
+    # 若已缓存，可直接写 "Qwen/Qwen3-ASR-1.7B"，程序会自动从 ~/.cache/huggingface/hub 加载
+    model_path = "Qwen/Qwen3-ASR-1.7B"
+
+    # 后端选择："transformers" 或 "vllm"
+    backend = "transformers"
+
+    # transformers 后端参数
+    device_map = "auto"
+    dtype = "auto"              # 可选 "auto", "float16", "bfloat16", "float32"
+
+    # vLLM 后端参数
+    gpu_memory_utilization = 0.8
+
+    # 通用参数
+    max_new_tokens = 512
+    max_inference_batch_size = 32
     verbose = False
 

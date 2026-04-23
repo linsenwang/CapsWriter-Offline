@@ -63,6 +63,9 @@ def check_model() -> None:
                 ModelPaths.qwen3_asr_gguf_llm_decode,
             ]
         }
+    elif model_type == 'qwen_asr_hf':
+        # HuggingFace 后端：使用 qwen-asr 包从缓存或 Hub 加载，无需本地 GGUF 文件
+        required_files = {}
     else:
         error_msg = f"不支持的模型类型: {Config.model_type}"
         logger.error(error_msg)
@@ -74,6 +77,7 @@ def check_model() -> None:
     - 'sensevoice'
     - 'paraformer'
     - 'qwen_asr'
+    - 'qwen_asr_hf'
 
         ''', style='bright_red')
         input('按回车退出')
