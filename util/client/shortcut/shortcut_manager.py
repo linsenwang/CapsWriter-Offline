@@ -207,13 +207,22 @@ class ShortcutManager:
         """鼠标点击回调（macOS/Linux）"""
         # 映射 pynput 鼠标按钮到我们的名称
         # macOS 上 pynput 的 Button 枚举没有 x1/x2，只有 left/middle/right/unknown
-        button_map = {}
+        button_map = {
+            mouse.Button.left: 'left',
+            mouse.Button.right: 'right',
+            mouse.Button.middle: 'middle',
+        }
         if hasattr(mouse.Button, 'x1'):
             button_map[mouse.Button.x1] = 'x1'
         if hasattr(mouse.Button, 'x2'):
             button_map[mouse.Button.x2] = 'x2'
+
         button_name = button_map.get(button)
         if button_name is None:
+            if button == mouse.Button.unknown:
+                logger.debug("[mouse] 检测到 unknown 按钮（可能是 macOS 侧键），但无法区分 x1/x2，已忽略")
+            else:
+                logger.debug(f"[mouse] 未识别的按钮: {button!r}，已忽略")
             return
 
         # 防自捕获检查

@@ -60,9 +60,14 @@ class ShortcutEmulator:
 
         # pynput 鼠标按键对象映射
         button_map = {
-            'x1': mouse.Button.x1,
-            'x2': mouse.Button.x2
+            'left': mouse.Button.left,
+            'right': mouse.Button.right,
+            'middle': mouse.Button.middle,
         }
+        if hasattr(mouse.Button, 'x1'):
+            button_map['x1'] = mouse.Button.x1
+        if hasattr(mouse.Button, 'x2'):
+            button_map['x2'] = mouse.Button.x2
 
         if button_name in button_map:
             button = button_map[button_name]
