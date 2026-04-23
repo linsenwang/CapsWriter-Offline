@@ -24,7 +24,7 @@ class ClientConfig:
     threshold    = 0.3          # 快捷键触发阈值（秒）
 
     paste        = True         # 是否以写入剪切板然后模拟 Ctrl-V 粘贴的方式输出结果
-    restore_clip = True         # 模拟粘贴后是否恢复剪贴板
+    restore_clip = False        # 模拟粘贴后是否恢复剪贴板
 
     save_transcript = True      # 是否保存转录文本和时间到本地日记文件 (YYYY/MM/DD.md)
     save_audio = False          # 是否保存录音文件
