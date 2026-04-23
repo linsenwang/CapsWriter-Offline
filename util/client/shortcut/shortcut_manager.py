@@ -7,8 +7,13 @@
 2. 防止不同按键互相干扰
 3. restore 功能的防自捕获逻辑
 4. hold_mode 和 click_mode 支持
+
+跨平台说明：
+- Windows: 使用 win32_event_filter 实现低延迟事件过滤和单事件抑制
+- macOS/Linux: 使用 on_press/on_release 回调，不支持单事件抑制（suppress 无效）
 """
 import time
+import platform
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Dict, List, Optional
 
@@ -32,7 +37,8 @@ class ShortcutManager:
     快捷键管理器
 
     统一管理多个快捷键，使用 pynput 监听键盘和鼠标事件。
-    所有事件处理都在 win32_event_filter 中完成，确保高性能和低延迟。
+    Windows 下使用 win32_event_filter 实现高性能低延迟处理。
+    macOS/Linux 下使用 on_press/on_release 回调。
     """
 
     def __init__(self, state: 'ClientState', shortcuts: List['Shortcut']):
@@ -45,6 +51,7 @@ class ShortcutManager:
         """
         self.state = state
         self.shortcuts = shortcuts
+        self._is_macos = platform.system() == 'Darwin'
 
         # 监听器
         self.keyboard_listener: Optional[keyboard.Listener] = None
@@ -82,10 +89,10 @@ class ShortcutManager:
             task.threshold = shortcut.get_threshold(Config.threshold)
             self.tasks[shortcut.key] = task
 
-    # ========== 监听器创建 ==========
+    # ========== Windows 监听器创建 ==========
 
     def create_keyboard_filter(self):
-        """创建键盘事件过滤器"""
+        """创建键盘事件过滤器（Windows 专用）"""
         def win32_event_filter(msg, data):
             # 只处理 KEYDOWN 和 KEYUP 消息
             if msg not in KEYBOARD_MESSAGES:
@@ -120,7 +127,7 @@ class ShortcutManager:
         return win32_event_filter
 
     def create_mouse_filter(self):
-        """创建鼠标事件过滤器"""
+        """创建鼠标事件过滤器（Windows 专用）"""
         def win32_event_filter(msg, data):
             # 只处理 XBUTTON 消息
             if msg not in MOUSE_MESSAGES:
@@ -153,6 +160,76 @@ class ShortcutManager:
             return True
 
         return win32_event_filter
+
+    # ========== macOS/Linux 回调 ==========
+
+    def _on_press(self, key) -> None:
+        """键盘按下回调（macOS/Linux）"""
+        key_name = KeyMapper.pynput_key_to_name(key)
+        if key_name is None:
+            return
+
+        # 防自捕获检查（简化版，macOS 无 msg 类型）
+        if self._emulator.is_emulating(key_name):
+            return
+        if self.is_restoring(key_name):
+            return
+
+        # 查找匹配的快捷键
+        if key_name not in self.tasks:
+            return
+
+        task = self.tasks[key_name]
+        self._event_handler.handle_keydown(key_name, task)
+
+    def _on_release(self, key) -> None:
+        """键盘释放回调（macOS/Linux）"""
+        key_name = KeyMapper.pynput_key_to_name(key)
+        if key_name is None:
+            return
+
+        # 防自捕获检查
+        if self._emulator.is_emulating(key_name):
+            self._emulator.clear_emulating_flag(key_name)
+            return
+        if self.is_restoring(key_name):
+            self.clear_restoring_flag(key_name)
+            return
+
+        # 查找匹配的快捷键
+        if key_name not in self.tasks:
+            return
+
+        task = self.tasks[key_name]
+        self._event_handler.handle_keyup(key_name, task)
+
+    def _on_click(self, x, y, button, pressed) -> None:
+        """鼠标点击回调（macOS/Linux）"""
+        # 映射 pynput 鼠标按钮到我们的名称
+        button_map = {
+            mouse.Button.x1: 'x1',
+            mouse.Button.x2: 'x2',
+        }
+        button_name = button_map.get(button)
+        if button_name is None:
+            return
+
+        # 防自捕获检查
+        if self._emulator.is_emulating(button_name):
+            if not pressed:
+                self._emulator.clear_emulating_flag(button_name)
+            return
+
+        # 查找匹配的快捷键
+        if button_name not in self.tasks:
+            return
+
+        task = self.tasks[button_name]
+
+        if pressed:
+            self._event_handler.handle_keydown(button_name, task)
+        else:
+            self._handle_mouse_keyup(button_name, task)
 
     def _handle_mouse_keyup(self, button_name: str, task) -> None:
         """处理鼠标按键释放事件"""
@@ -216,7 +293,7 @@ class ShortcutManager:
     # ========== 防自捕获检查 ==========
 
     def _check_emulating(self, key_name: str, msg: int, is_mouse: bool = False) -> bool:
-        """检查是否正在模拟按键"""
+        """检查是否正在模拟按键（Windows 专用）"""
         if not self._emulator.is_emulating(key_name):
             return False
 
@@ -231,7 +308,7 @@ class ShortcutManager:
         return True  # 放行
 
     def _check_restoring(self, key_name: str, msg: int) -> bool:
-        """检查是否正在恢复按键"""
+        """检查是否正在恢复按键（Windows 专用）"""
         if not self.is_restoring(key_name):
             return False
 
@@ -248,16 +325,33 @@ class ShortcutManager:
         has_mouse = any(s.type == 'mouse' for s in self.shortcuts if s.enabled)
 
         if has_keyboard:
-            self.keyboard_listener = keyboard.Listener(
-                win32_event_filter=self.create_keyboard_filter()
-            )
+            if self._is_macos:
+                # macOS: 使用 on_press/on_release 回调
+                if any(s.suppress for s in self.shortcuts if s.type == 'keyboard' and s.enabled):
+                    logger.warning("macOS 不支持单事件抑制（suppress），快捷键事件将正常传递给系统")
+                self.keyboard_listener = keyboard.Listener(
+                    on_press=self._on_press,
+                    on_release=self._on_release,
+                )
+            else:
+                # Windows: 使用 win32_event_filter
+                self.keyboard_listener = keyboard.Listener(
+                    win32_event_filter=self.create_keyboard_filter()
+                )
             self.keyboard_listener.start()
             logger.info("键盘监听器已启动")
 
         if has_mouse:
-            self.mouse_listener = mouse.Listener(
-                win32_event_filter=self.create_mouse_filter()
-            )
+            if self._is_macos:
+                # macOS: 使用 on_click 回调
+                self.mouse_listener = mouse.Listener(
+                    on_click=self._on_click,
+                )
+            else:
+                # Windows: 使用 win32_event_filter
+                self.mouse_listener = mouse.Listener(
+                    win32_event_filter=self.create_mouse_filter()
+                )
             self.mouse_listener.start()
             logger.info("鼠标监听器已启动")
 

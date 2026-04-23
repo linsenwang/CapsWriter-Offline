@@ -5,21 +5,33 @@
 处理按键名称和虚拟键码之间的转换，以及相关常量定义
 """
 
+import platform
 from pynput import keyboard
-from pynput._util.win32 import KeyTranslator
 from . import logger
 
 
-# 创建键盘翻译器实例（用于 VK 到字符的转换）
-_key_translator = KeyTranslator()
+# 尝试导入 Windows 专用的 KeyTranslator
+if platform.system() == 'Windows':
+    try:
+        from pynput._util.win32 import KeyTranslator
+        _key_translator = KeyTranslator()
+    except Exception:
+        _key_translator = None
+else:
+    _key_translator = None
 
-# 特殊键 VK 映射（从 pynput 复制）
-_SPECIAL_KEYS = {
-    key.value.vk: key
-    for key in keyboard.Key
-}
+# 特殊键 VK 映射（从 pynput 复制，仅 Windows 有效）
+_SPECIAL_KEYS = {}
+if platform.system() == 'Windows':
+    try:
+        _SPECIAL_KEYS = {
+            key.value.vk: key
+            for key in keyboard.Key
+        }
+    except Exception:
+        pass
 
-# 小键盘按键映射（VK -> 名称）
+# 小键盘按键映射（VK -> 名称，仅 Windows 有效）
 NUMPAD_KEYS = {
     0x60: 'numpad0',  0x61: 'numpad1',  0x62: 'numpad2',  0x63: 'numpad3',
     0x64: 'numpad4',  0x65: 'numpad5',  0x66: 'numpad6',  0x67: 'numpad7',
@@ -64,6 +76,9 @@ class KeyMapper:
     # pynput 特殊键对象缓存
     _SPECIAL_KEY_OBJECTS = None
 
+    # pynput 键对象 -> 名称 的反向映射（用于 macOS/Linux）
+    _KEY_OBJECT_TO_NAME = None
+
     @classmethod
     def _get_special_key_objects(cls):
         """获取 pynput 特殊键对象（延迟初始化）"""
@@ -86,10 +101,17 @@ class KeyMapper:
             }
         return cls._SPECIAL_KEY_OBJECTS
 
+    @classmethod
+    def _get_key_object_to_name(cls):
+        """获取 pynput 键对象到名称的反向映射"""
+        if cls._KEY_OBJECT_TO_NAME is None:
+            cls._KEY_OBJECT_TO_NAME = {v: k for k, v in cls._get_special_key_objects().items()}
+        return cls._KEY_OBJECT_TO_NAME
+
     @staticmethod
     def vk_to_name(vk: int) -> str:
         """
-        将虚拟键码转换为按键名称
+        将虚拟键码转换为按键名称（Windows 专用）
 
         Args:
             vk: 虚拟键码
@@ -106,15 +128,50 @@ class KeyMapper:
             return NUMPAD_KEYS[vk]
 
         # 使用 pynput 的 KeyTranslator 获取字符（字母、数字、符号键）
-        try:
-            params = _key_translator(vk, is_press=True)
-            if 'char' in params and params['char'] is not None:
-                return params['char']
-        except Exception:
-            pass
+        if _key_translator is not None:
+            try:
+                params = _key_translator(vk, is_press=True)
+                if 'char' in params and params['char'] is not None:
+                    return params['char']
+            except Exception:
+                pass
 
         # 未知键码，返回 vk_ 格式
         return f'vk_{vk}'
+
+    @classmethod
+    def pynput_key_to_name(cls, key) -> str:
+        """
+        将 pynput 按键对象转换为按键名称（跨平台）
+
+        用于 macOS/Linux 的 on_press/on_release 回调中，
+        将 pynput 的 key 对象映射为我们内部的按键名称。
+
+        Args:
+            key: pynput.keyboard.Key 或 pynput.keyboard.KeyCode 对象
+
+        Returns:
+            str: 按键名称，未知则返回 None
+        """
+        # 特殊键（Key 枚举）
+        key_to_name = cls._get_key_object_to_name()
+        if key in key_to_name:
+            return key_to_name[key]
+
+        # 普通字符键（KeyCode）
+        if isinstance(key, keyboard.KeyCode):
+            if key.char is not None:
+                return key.char
+            if key.vk is not None:
+                # 尝试通过 VK 查找特殊键
+                for special_key in keyboard.Key:
+                    if hasattr(special_key, 'value') and hasattr(special_key.value, 'vk'):
+                        if special_key.value.vk == key.vk:
+                            return special_key.name
+                return f'vk_{key.vk}'
+
+        # 未知键
+        return None
 
     @staticmethod
     def name_to_key(key_name: str):

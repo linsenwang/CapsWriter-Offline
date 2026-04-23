@@ -12,7 +12,6 @@ import platform
 from typing import Optional
 import re
 
-import keyboard
 import pyclip
 from pynput import keyboard as pynput_keyboard
 
@@ -84,7 +83,7 @@ class TextOutput:
         # 复制结果
         pyclip.copy(text)
         
-        # 粘贴结果（使用 pynput 模拟 Ctrl+V）
+        # 粘贴结果（使用 pynput 模拟 Ctrl+V / Cmd+V）
         controller = pynput_keyboard.Controller()
         if platform.system() == 'Darwin':
             # macOS: Command+V
@@ -95,7 +94,7 @@ class TextOutput:
             with controller.pressed(pynput_keyboard.Key.ctrl):
                 controller.tap('v')
         
-        logger.debug("已发送粘贴命令 (Ctrl+V)")
+        logger.debug("已发送粘贴命令 (Ctrl+V / Cmd+V)")
         
         # 还原剪贴板
         if Config.restore_clip:
@@ -107,11 +106,27 @@ class TextOutput:
         """
         通过模拟打字方式输出文本
 
-        使用 keyboard.write 替代 pynput.keyboard.Controller.type()，
+        优先使用 keyboard 库（Windows），
+        macOS/Linux 使用 pynput.keyboard.Controller.type()，
         避免与中文输入法冲突。
 
         Args:
             text: 要输出的文本
         """
         logger.debug(f"使用打字方式输出文本，长度: {len(text)}")
-        keyboard.write(text)
+        
+        if platform.system() == 'Windows':
+            # Windows: 使用 keyboard 库（效果更好）
+            try:
+                import keyboard
+                keyboard.write(text)
+                return
+            except Exception as e:
+                logger.warning(f"keyboard.write 失败，回退到 pynput: {e}")
+        
+        # macOS / Linux / 回退: 使用 pynput
+        try:
+            controller = pynput_keyboard.Controller()
+            controller.type(text)
+        except Exception as e:
+            logger.error(f"pynput 打字失败: {e}")

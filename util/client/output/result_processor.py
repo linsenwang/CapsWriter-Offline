@@ -110,15 +110,16 @@ class ResultProcessor:
         用于调试按键卡住问题。
         """
         try:
-            import keyboard
-            
-            # 获取所有当前按下的键
-            pressed_keys = keyboard._pressed_events
-            
-            # if pressed_keys:
-            key_names = list(pressed_keys.keys())
-            logger.debug(f"当前按下的键: {key_names}")
+            import platform
+            if platform.system() == 'Windows':
+                import keyboard
                 
+                # 获取所有当前按下的键
+                pressed_keys = keyboard._pressed_events
+                
+                # if pressed_keys:
+                key_names = list(pressed_keys.keys())
+                logger.debug(f"当前按下的键: {key_names}")
         except Exception as e:
             logger.debug(f"检测按键状态失败: {e}")
     

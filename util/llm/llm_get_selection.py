@@ -3,14 +3,15 @@ LLM 获取选中文字功能
 
 功能：
 1. 获取当前剪贴板内容（用于还原）
-2. 模拟 Ctrl+C 复制选中的文字
+2. 模拟 Ctrl+C / Cmd+C 复制选中的文字
 3. 读取新的剪贴板内容
 4. 还原原来的剪贴板内容
 5. 判断内容是否变化，返回选中的文字
 """
 import time
+import platform
 import pyclip
-import keyboard
+from pynput import keyboard as pynput_keyboard
 from . import logger
 from .llm_clipboard import safe_paste
 from util.client.state import get_state
@@ -21,9 +22,22 @@ state = get_state()
 _last_selection_by_role = {}
 
 
+def _simulate_copy():
+    """模拟复制快捷键（跨平台）"""
+    controller = pynput_keyboard.Controller()
+    if platform.system() == 'Darwin':
+        # macOS: Command+C
+        with controller.pressed(pynput_keyboard.Key.cmd):
+            controller.tap('c')
+    else:
+        # Windows/Linux: Ctrl+C
+        with controller.pressed(pynput_keyboard.Key.ctrl):
+            controller.tap('c')
+
+
 def get_selected_text(role_config) -> str:
     """
-    获取用户当前选中的文字（通过模拟 Ctrl+C）
+    获取用户当前选中的文字（通过模拟 Ctrl+C / Cmd+C）
 
     Args:
         role_config: 角色配置 RoleConfig 对象
@@ -43,8 +57,8 @@ def get_selected_text(role_config) -> str:
         # 保存当前剪贴板内容
         original_clipboard = safe_paste()
 
-        # 模拟 Ctrl+C 复制选中的文字
-        keyboard.press_and_release('ctrl+c')
+        # 模拟复制快捷键
+        _simulate_copy()
 
         # 等待复制操作完成
         time.sleep(0.1)
@@ -93,4 +107,3 @@ def record_selection_usage(role_config, selection_text: str):
     global _last_selection_by_role
     role_name = role_config.name
     _last_selection_by_role[role_name] = selection_text
-

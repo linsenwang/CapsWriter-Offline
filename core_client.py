@@ -48,12 +48,10 @@ _main_task = None  # 主任务引用
 def _check_macos_permissions() -> None:
     """检查 MacOS 权限设置"""
     if system() == 'Darwin' and not sys.argv[1:]:
-        if os.getuid() != 0:
-            print('在 MacOS 上需要以管理员启动客户端才能监听键盘活动，请 sudo 启动')
-            input('按回车退出')
-            sys.exit(1)
-        else:
-            os.umask(0o000)
+        # macOS 上 pynput 不需要 root，但需要 Accessibility 权限
+        # 这里只给出提示，不强制退出
+        logger.info("macOS 提示: 如果快捷键无响应，请前往 系统设置 > 隐私与安全性 > 辅助功能 ")
+        logger.info("将终端（Terminal/iTerm/VSCode）添加到辅助功能列表并开启权限")
 
 
 async def main_mic() -> None:

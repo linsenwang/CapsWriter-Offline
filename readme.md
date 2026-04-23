@@ -4,7 +4,7 @@
 
 > **按住 CapsLock 说话，松开就上屏。就这么简单。**
 
-**CapsWriter-Offline** 是一个专为 Windows 打造的**完全离线**语音输入工具。
+**CapsWriter-Offline** 是一个专为 Windows / macOS 打造的**完全离线**语音输入工具。
 
 
 ## 🚀 更新说明：
@@ -35,7 +35,7 @@ v2.2 新增：
 -   **UDP广播和控制**：支持将结果 UDP 广播，也可以通过 UDP 控制客户端，便于做扩展。
 -   **Toast窗口编辑**：支持对角色输出的 Toast 窗口内容进行编辑。
 -   **多快捷键**：支持设置多个听写键，以及鼠标快捷键，通过 pynput 实现。
--   **繁体转换**：支持输出繁体中文，通过 zhconv 实现。
+-   **繁体转换**：支持输出识别结果转换为繁体中文，通过 zhconv 实现。
 
 v2.1 新增：
 -   **更强的模型**：内置多种模型可选，速度与准确率大幅提升。
@@ -43,22 +43,6 @@ v2.1 新增：
 -   **RAG 检索增强**：热词识别不再死板，支持音素级的 fuzzy 匹配，就算发音稍有偏差也能认出。
 -   **LLM 角色系统**：集成大模型，支持润色、翻译、写作等多种自定义角色。
 -   **纠错检索**：可记录纠错历史，辅助LLM润色。
--   **托盘化运行**：新增托盘图标，可以完全隐藏前台窗口。
--   **完善的日志**：全链路日志记录，排查问题不再抓瞎。
-
-这个项目鸽了整整两年，真不是因为我懒。在这段时间里，我一直在等一个足够惊艳的离线语音模型。Whisper 虽然名气大，但它实际的延迟和准确率始终没法让我完全满意。直到 `FunASR-Nano` 开源发布，它那惊人的识别表现让我瞬间心动，它的 `LLM Decoder` 能识别我讲话的意图进而调整输出，甚至通过我的语速决定在何时添加顿号，就是它了！必须快马加鞭，做出这个全新版本。
-
-
-## ✨ 核心特性
-
--   **语音输入**：按住 `CapsLock键` 或 `鼠标侧键X2` 说话，松开即输入，默认去除末尾逗句号。支持对讲机模式和单击录音模式。
--   **文件转录**：音视频文件往客户端一丢，字幕 (`.srt`)、文本 (`.txt`)、时间戳 (`.json`) 统统都有。
--   **数字 ITN**：自动将「十五六个」转为「15~16个」，支持各种复杂数字格式。
--   **热词语境**：在 `hot-server.txt` 记下专业术语，经音素筛选后，用作 Fun-ASR-Nano 的语境增强识别 
--   **热词替换**：在 `hot.txt` 记下偏僻词，通过音素模糊匹配，相似度大于阈值则强制替换。
--   **正则替换**：在 `hot-rule.txt` 用正则或简单等号规则，精准强制替换。
--   **纠错记录**：在 `hot-rectify.txt` 记录对识别结果的纠错，可辅助LLM润色。
--   **LLM 角色**：预置了润色、翻译、代码助手等角色，当识别结果的开头匹配任一角色名字时，将交由该角色处理。
 -   **托盘菜单**：右键托盘图标即可添加热词、复制结果、清除LLM记忆。
 -   **C/S 架构**：服务端与客户端分离，虽然 Win7 老电脑跑不了服务端模型，但最少能用客户端输入。
 -   **日记归档**：按日期保存你的每一句语音及其识别结果。
@@ -71,19 +55,51 @@ LLM 角色既可以使用 Ollama 运行的本地模型，又可以用 API 访问
 
 ## 💻 平台支持
 
-目前**仅能保证在 Windows 10/11 (64位) 下完美运行**。
+目前**能保证在 Windows 10/11 (64位) 和 macOS 下运行**。
 
+-   **Windows 10/11**：完全支持，包括托盘、窗口管理、事件抑制等所有功能。
+-   **macOS**：基本功能可用，包括语音输入、文件转录、托盘图标、LLM 角色等。
+    -   需要授予**辅助功能（Accessibility）**权限：系统设置 > 隐私与安全性 > 辅助功能，将终端应用（如 Terminal、iTerm2、VS Code）添加到列表并开启。
+    -   **暂不支持**单事件抑制（`suppress` 无效），因此 CapsLock 等切换键在录音时会改变状态。
+    -   建议 macOS 用户使用 `f12` 等非切换键作为快捷键，或接受 CapsLock 状态在录音后切换。
+    -   模型加速：macOS 不支持 DirectML，GGUF 模型可使用 Metal（通过 llama.cpp 的 Vulkan/Metal 后端）。
 -   **Linux**：暂无环境进行测试和打包，无法保证兼容性。
--   **MacOS**：由于底层的 `keyboard` 库已放弃支持 MacOS，且系统权限限制极多，暂时无法支持。
 
 
 ## 🎬 快速开始
+
+### Windows
 
 1.  **准备环境**：确保安装了 [VC++ 运行库](https://learn.microsoft.com/zh-cn/cpp/windows/latest-supported-vc-redist)。
 2.  **下载解压**：下载 [Latest Release](https://github.com/HaujetZhao/CapsWriter-Offline/releases/latest) 里的软件本体，再到 [Models Release](https://github.com/HaujetZhao/CapsWriter-Offline/releases/tag/models) 下载模型压缩包，将模型解压，放入 `models` 文件夹中对应模型的文件夹里。
 3.  **启动服务**：双击 `start_server.exe`，它会自动最小化到托盘菜单。
 4.  **启动听写**：双击 `start_client.exe`，它会自动最小化到托盘菜单。
 5.  **开始录音**：按住 `CapsLock键` 或 `鼠标侧键X2` 就可以说话了！
+
+### macOS
+
+1.  **克隆仓库**：
+    ```bash
+    git clone https://github.com/linsenwang/CapsWriter-Offline.git
+    cd CapsWriter-Offline
+    ```
+2.  **安装依赖**：
+    ```bash
+    # 服务端依赖
+    pip install -r requirements-server.txt
+    # 客户端依赖
+    pip install -r requirements-client.txt
+    ```
+3.  **下载模型**：从 [Models Release](https://github.com/HaujetZhao/CapsWriter-Offline/releases/tag/models) 下载模型压缩包，解压到 `models/` 目录下。
+4.  **启动服务**：
+    ```bash
+    python start_server.py
+    ```
+5.  **启动客户端**（在另一个终端）：
+    ```bash
+    python start_client.py
+    ```
+6.  **授予权限**：如果快捷键无响应，前往 系统设置 > 隐私与安全性 > 辅助功能，将终端应用添加到列表并开启。
 
 
 ## 🎤 模型说明
@@ -105,6 +121,12 @@ LLM 角色既可以使用 Ollama 运行的本地模型，又可以用 API 访问
 
 
 ## 🛠️ 常见问题
+
+**Q: macOS 上按了快捷键没反应？**  
+A: 请确保在 系统设置 > 隐私与安全性 > 辅助功能 中，为终端应用（Terminal/iTerm2/VS Code）开启了辅助功能权限。首次使用 pynput 监听键盘时，系统会弹出权限请求对话框，请点击"允许"。
+
+**Q: macOS 上 CapsLock 录音后会切换大小写状态？**  
+A: 是的，macOS 目前不支持单事件抑制，因此 CapsLock 等切换键在按下时会改变状态。建议 macOS 用户改用 `f12` 等普通功能键作为快捷键，或在 `config_client.py` 中将 `suppress` 设为 `False` 并使用非切换键。
 
 **Q: 为什么按了没反应？**  
 A: 请确认 `start_client.exe` 的黑窗口还在运行。若想在管理员权限运行的程序中输入，也需以管理员权限运行客户端。
