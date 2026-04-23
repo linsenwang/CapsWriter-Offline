@@ -43,6 +43,18 @@ class TextOutput:
         clean_text = re.sub(f"(?<=.)[{Config.trash_punc}]$", "", text)
         return clean_text
     
+    @staticmethod
+    def _is_english_text(text: str) -> bool:
+        """
+        检测文本是否为英文内容（含空格分隔的单词）。
+        中文输入法下模拟打字输出英文+空格会导致空格触发选词，
+        因此需要自动切换到粘贴模式。
+        """
+        alpha_chars = sum(1 for c in text if c.isalpha() and c.isascii())
+        chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
+        has_space = ' ' in text
+        return has_space and alpha_chars > 0 and alpha_chars > chinese_chars * 2
+
     async def output(self, text: str, paste: Optional[bool] = None) -> None:
         """
         输出识别结果
@@ -59,6 +71,11 @@ class TextOutput:
         # 确定输出方式
         if paste is None:
             paste = Config.paste
+        
+        # 自动检测英文文本，使用粘贴模式避免中文输入法干扰
+        if not paste and self._is_english_text(text):
+            logger.debug("检测到英文文本，自动使用粘贴模式避免输入法干扰")
+            paste = True
         
         if paste:
             await self._paste_text(text)

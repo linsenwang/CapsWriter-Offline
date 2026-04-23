@@ -225,6 +225,8 @@ class ShortcutManager:
                 logger.debug(f"[mouse] 未识别的按钮: {button!r}，已忽略")
             return
 
+        logger.debug(f"[mouse] 点击回调: button={button!r} -> name={button_name}, pressed={pressed}")
+
         # 防自捕获检查
         if self._emulator.is_emulating(button_name):
             if not pressed:

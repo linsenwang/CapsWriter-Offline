@@ -15,11 +15,15 @@ class ClientConfig:
     port = '6016'               # Server 端口
 
     # 快捷键配置列表
-    shortcuts = [{'key': 'middle', 'type': 'mouse', 'suppress': True, 'hold_mode': True, 'enabled': True, 'mouse_button': 'x2'}, {'key': 'f5', 'type': 'keyboard', 'suppress': True, 'hold_mode': True, 'enabled': True}]
+    shortcuts = [
+        # 鼠标侧键由 Hammerspoon 监听并发送 UDP 触发，避免 pynput 对 macOS 鼠标支持不佳的问题
+        # {'key': 'middle', 'type': 'mouse', 'suppress': True, 'hold_mode': True, 'enabled': True, 'mouse_button': 'x2'},
+        {'key': 'f5', 'type': 'keyboard', 'suppress': True, 'hold_mode': True, 'enabled': True},
+    ]
 
     threshold    = 0.3          # 快捷键触发阈值（秒）
 
-    paste        = False        # 是否以写入剪切板然后模拟 Ctrl-V 粘贴的方式输出结果
+    paste        = True         # 是否以写入剪切板然后模拟 Ctrl-V 粘贴的方式输出结果
     restore_clip = True         # 模拟粘贴后是否恢复剪贴板
 
     save_audio = True           # 是否保存录音文件
@@ -63,7 +67,7 @@ class ClientConfig:
         # ('192.168.1.255', 6017),      # 局域网广播（示例，按需启用）
     ]
 
-    udp_control = False             # 是否启用 UDP 控制录音（外部程序发送 START/STOP 命令）
+    udp_control = True              # 是否启用 UDP 控制录音（外部程序发送 START/STOP 命令）
     udp_control_addr = '127.0.0.1'  # UDP 控制监听地址（'0.0.0.0' 允许外部访问）
     udp_control_port = 6018         # UDP 控制监听端口
 
