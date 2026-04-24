@@ -62,6 +62,13 @@ class ResultProcessor:
         self._text_output = TextOutput()
         self._exit_event = asyncio.Event()
         self._loop = asyncio.get_running_loop()  # 保存事件循环引用
+        
+        # 预创建 DiaryWriter，避免每次消息都创建新实例
+        if Config.save_transcript:
+            from util.client.diary.diary_writer import DiaryWriter
+            self._diary_writer = DiaryWriter()
+        else:
+            self._diary_writer = None
 
     def request_exit(self):
         """请求退出处理循环（线程安全）"""
@@ -132,46 +139,32 @@ class ResultProcessor:
         console.print('[green]连接成功\n')
         logger.info("WebSocket 连接成功")
 
+        # 启动一个长期的后台任务等待退出事件，避免每次循环都创建/取消
+        exit_task = asyncio.create_task(self._exit_event.wait())
+
         try:
             while True:
                 # 检查退出事件
-                if self._exit_event.is_set():
+                if self._exit_event.is_set() or lifecycle.is_shutting_down:
                     logger.info("检测到退出事件，停止处理循环")
                     break
 
                 # 创建一个任务来接收消息
                 recv_task = asyncio.create_task(self.state.websocket.recv())
-                logger.debug("已创建接收消息任务")
-
-                # 创建一个任务来等待退出事件
-                exit_wait_task = asyncio.create_task(self._exit_event.wait())
-                logger.debug("已创建退出等待任务")
 
                 # 等待任意一个任务完成
                 done, pending = await asyncio.wait(
-                    [recv_task, exit_wait_task],
+                    [recv_task, exit_task],
                     return_when=asyncio.FIRST_COMPLETED
                 )
-                logger.debug(f"任务完成: done={len(done)}, pending={len(pending)}")
 
-                # 取消未完成的任务
-                for task in pending:
-                    task.cancel()
+                # 如果是退出请求，取消接收任务并退出
+                if exit_task in done:
+                    recv_task.cancel()
                     try:
-                        await task
+                        await recv_task
                     except asyncio.CancelledError:
                         pass
-
-                # 检查是否是退出请求
-                if exit_wait_task in done:
-                    logger.info("收到退出请求，停止处理循环")
-                    # 取消接收任务
-                    if recv_task not in done and not recv_task.done():
-                        recv_task.cancel()
-                        try:
-                            await recv_task
-                        except asyncio.CancelledError:
-                            pass
                     break
 
                 # 如果是接收任务完成，处理消息
@@ -182,9 +175,7 @@ class ResultProcessor:
                         if lifecycle.is_shutting_down:
                             logger.info("处理消息前检测到退出请求")
                             break
-                        logger.debug("开始处理消息")
                         await self._handle_message(message)
-                        logger.debug("消息处理完成")
                     except asyncio.CancelledError:
                         raise
                     except ConnectionClosedError:
@@ -207,6 +198,13 @@ class ResultProcessor:
             logger.error(f"接收结果时发生错误: {e}", exc_info=True)
             print(e)
         finally:
+            # 确保退出任务被取消
+            if not exit_task.done():
+                exit_task.cancel()
+                try:
+                    await exit_task
+                except asyncio.CancelledError:
+                    pass
             self._cleanup()
 
     async def _handle_message(self, message: str) -> None:
@@ -330,10 +328,8 @@ class ResultProcessor:
                 logger.debug(f"保存录音文件: {file_audio}")
 
         # 保存转录结果到日记文件 (独立开关，不依赖 save_audio)
-        if Config.save_transcript:
-            from util.client.diary.diary_writer import DiaryWriter
-            diary_writer = DiaryWriter()
-            diary_writer.write(text, message['time_start'], file_audio)
+        if Config.save_transcript and self._diary_writer:
+            self._diary_writer.write(text, message['time_start'], file_audio)
             logger.debug("写入 MD 日记文件")
 
         # LLM 结果显示和保存

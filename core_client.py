@@ -91,6 +91,10 @@ async def main_mic() -> None:
     _state = setup_client_components(BASE_DIR)
 
     # 接收结果
+    _retry_count = 0
+    _retry_delay = 1.0
+    _max_retry_delay = 30.0
+
     try:
         processor = ResultProcessor(_state)
         _state.processor = processor # 注入状态以便清理
@@ -111,6 +115,10 @@ async def main_mic() -> None:
             if wait_shutdown in done:
                 logger.info("主循环检测到退出信号")
                 process_task.cancel() # 取消正在进行的处理
+                try:
+                    await process_task
+                except asyncio.CancelledError:
+                    pass
                 break
             
             # 如果处理任务结束（无论是正常还是异常），继续下一轮
@@ -119,13 +127,25 @@ async def main_mic() -> None:
                 # 检查是否有关闭请求（可能是 processor 内部触发）
                 if lifecycle.is_shutting_down:
                     break
-                # 如果没有请求退出但任务结束了，可能是异常
+                # 如果没有请求退出但任务结束了，可能是连接断开或异常
                 try:
                     await process_task
+                    # process_loop 正常返回（如连接失败），需要延迟后重试
+                    _retry_count += 1
+                    logger.warning(f"处理循环异常结束，{_retry_delay:.1f}秒后第 {_retry_count} 次重试...")
+                    await asyncio.sleep(_retry_delay)
+                    _retry_delay = min(_retry_delay * 1.5, _max_retry_delay)
+                except asyncio.CancelledError:
+                    logger.info("处理循环被取消")
+                    break
                 except Exception as e:
-                    logger.error(f"处理循环异常: {e}")
-                    # 防止死循环打印日志
-                    await asyncio.sleep(1)
+                    _retry_count += 1
+                    logger.error(f"处理循环异常: {e}，{_retry_delay:.1f}秒后第 {_retry_count} 次重试...")
+                    await asyncio.sleep(_retry_delay)
+                    _retry_delay = min(_retry_delay * 1.5, _max_retry_delay)
+            
+            # 如果 process_loop 成功运行了一段时间（接收到消息），重置重试计数
+            # 注意：这里我们无法直接知道是否成功运行，但 process_loop 正常返回意味着需要重连
 
     except asyncio.CancelledError:
         logger.info("主任务被取消，正在退出...")

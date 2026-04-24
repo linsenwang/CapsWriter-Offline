@@ -51,7 +51,14 @@ class AudioRecorder:
         self._start_time: float = 0.0
         self._duration: float = 0.0
         self._cache: list = []
+        # 限制并发发送任务数量，防止 WebSocket 阻塞时 task 无限累积
+        self._send_semaphore = asyncio.Semaphore(8)
     
+    async def _send_with_semaphore(self, message: dict) -> None:
+        """通过信号量限制并发发送消息"""
+        async with self._send_semaphore:
+            await self._send_message(message)
+
     async def _send_message(self, message: dict) -> None:
         """发送消息到服务端"""
         websocket = self.state.websocket
@@ -156,7 +163,8 @@ class AudioRecorder:
                         ).decode('utf-8'),
                         'context': Config.context,
                     }
-                    asyncio.create_task(self._send_message(message))
+                    # 使用信号量限制并发发送，避免 WebSocket 阻塞时 task 无限累积
+                    asyncio.create_task(self._send_with_semaphore(message))
                     
                 elif task['type'] == 'finish':
                     # 如果有缓存的数据未发送，先发送缓存
@@ -181,7 +189,7 @@ class AudioRecorder:
                             ).decode('utf-8'),
                             'context': Config.context,
                         }
-                        asyncio.create_task(self._send_message(message))
+                        asyncio.create_task(self._send_with_semaphore(message))
 
                     # 完成写入本地文件
                     if Config.save_audio and self._file_manager:
