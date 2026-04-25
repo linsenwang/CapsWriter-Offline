@@ -188,3 +188,4 @@ file_*.txt
 release
 *.dll 
 *.exe
+status.json
