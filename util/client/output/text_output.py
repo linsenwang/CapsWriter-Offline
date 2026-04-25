@@ -8,15 +8,22 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import platform
+import subprocess
 from typing import Optional
 import re
 
 import pyclip
 from pynput import keyboard as pynput_keyboard
 
-from config_client import ClientConfig as Config
+from config_client import ClientConfig as Config, BASE_DIR
 from . import logger
+
+# 输入法切换工具路径
+_SWITCH_INPUT_TOOL = os.path.join(BASE_DIR, 'util', 'tools', 'switch_input')
+# 英文输入法 ID
+_ENGLISH_INPUT_SOURCE = 'com.apple.keylayout.ABC'
 
 
 
@@ -26,6 +33,10 @@ class TextOutput:
     
     提供文本输出功能，支持模拟打字和粘贴两种方式。
     """
+    
+    def __init__(self):
+        self._previous_input_source = None
+        self._tool_available = self._check_tool_available()
     
     @staticmethod
     def strip_punc(text: str) -> str:
@@ -72,15 +83,22 @@ class TextOutput:
         if paste is None:
             paste = Config.paste
         
-        # 自动检测英文文本，使用粘贴模式避免中文输入法干扰
-        if not paste and self._is_english_text(text):
+        # 自动检测英文文本，若未开启输入法切换则回退到粘贴模式
+        if not paste and self._is_english_text(text) and not Config.switch_input_method:
             logger.debug("检测到英文文本，自动使用粘贴模式避免输入法干扰")
             paste = True
         
         if paste:
             await self._paste_text(text)
         else:
-            self._type_text(text)
+            # 打字模式：先切换到英文输入法，再打字，最后恢复
+            if Config.switch_input_method:
+                self._switch_to_english()
+            try:
+                self._type_text(text)
+            finally:
+                if Config.switch_input_method:
+                    self._switch_back_input()
     
     async def _paste_text(self, text: str) -> None:
         """
@@ -119,6 +137,124 @@ class TextOutput:
             pyclip.copy(temp)
             logger.debug("剪贴板已恢复")
     
+    def _check_tool_available(self) -> bool:
+        """检查输入法切换工具是否可用"""
+        if platform.system() != 'Darwin':
+            return False
+        return os.path.isfile(_SWITCH_INPUT_TOOL) and os.access(_SWITCH_INPUT_TOOL, os.X_OK)
+
+    def _get_current_input_source(self) -> Optional[str]:
+        """获取当前输入法 ID"""
+        try:
+            result = subprocess.run(
+                [_SWITCH_INPUT_TOOL, 'current'],
+                capture_output=True, text=True, timeout=2
+            )
+            if result.returncode == 0:
+                # 输出格式: com.apple.keylayout.ABC (ABC)
+                line = result.stdout.strip()
+                if ' ' in line:
+                    return line.split(' ')[0]
+                return line
+        except Exception as e:
+            logger.warning(f"获取当前输入法失败: {e}")
+        return None
+
+    def _select_input_source(self, source_id: str) -> bool:
+        """切换到指定输入法"""
+        try:
+            result = subprocess.run(
+                [_SWITCH_INPUT_TOOL, 'select', source_id],
+                capture_output=True, text=True, timeout=2
+            )
+            # 诊断输出（会被 pm2-out.log 捕获）
+            print(f"[SWITCH_INPUT] select {source_id} -> rc={result.returncode} stdout={result.stdout.strip()} stderr={result.stderr.strip()}", flush=True)
+            return result.returncode == 0
+        except Exception as e:
+            print(f"[SWITCH_INPUT] exception: {e}", flush=True)
+            logger.warning(f"切换输入法失败: {e}")
+            return False
+
+    def _switch_to_english(self) -> None:
+        """
+        切换到英文输入法
+        
+        使用 Carbon TIS API 精确切换到英文 ABC 输入法。
+        """
+        logger.info(f"准备切换到英文输入法，工具可用: {self._tool_available}")
+        
+        if not self._tool_available:
+            # 回退到 Ctrl+Space 模拟
+            self._switch_to_english_fallback()
+            return
+        
+        # 记录当前输入法
+        self._previous_input_source = self._get_current_input_source()
+        logger.info(f"当前输入法: {self._previous_input_source}")
+        
+        # 如果当前已经是英文，不需要切换
+        if self._previous_input_source == _ENGLISH_INPUT_SOURCE:
+            logger.info("当前已经是英文输入法，无需切换")
+            return
+        
+        if self._select_input_source(_ENGLISH_INPUT_SOURCE):
+            logger.info("已切换到英文输入法 (ABC)")
+        else:
+            logger.warning("切换到英文输入法失败")
+
+    def _switch_back_input(self) -> None:
+        """
+        恢复之前的输入法
+        
+        使用 Carbon TIS API 精确恢复到之前的输入法。
+        """
+        logger.info(f"准备恢复输入法，工具可用: {self._tool_available}")
+        
+        if not self._tool_available:
+            self._switch_back_input_fallback()
+            return
+        
+        if not self._previous_input_source:
+            logger.info("没有记录的输入法需要恢复")
+            return
+        
+        # 如果之前就是英文，不需要恢复
+        if self._previous_input_source == _ENGLISH_INPUT_SOURCE:
+            logger.info("之前就是英文输入法，无需恢复")
+            self._previous_input_source = None
+            return
+        
+        if self._select_input_source(self._previous_input_source):
+            logger.info(f"已恢复输入法: {self._previous_input_source}")
+        else:
+            logger.warning(f"恢复输入法失败: {self._previous_input_source}")
+        
+        self._previous_input_source = None
+
+    def _switch_to_english_fallback(self) -> None:
+        """回退方案：模拟 Ctrl+Space 切换输入法"""
+        if platform.system() != 'Darwin':
+            return
+        try:
+            controller = pynput_keyboard.Controller()
+            with controller.pressed(pynput_keyboard.Key.ctrl):
+                controller.tap(pynput_keyboard.Key.space)
+            logger.debug("已切换到英文输入法 (Ctrl+Space 回退)")
+        except Exception as e:
+            logger.warning(f"切换输入法失败: {e}")
+
+    def _switch_back_input_fallback(self) -> None:
+        """回退方案：模拟 Ctrl+Space 恢复输入法"""
+        if platform.system() != 'Darwin':
+            return
+        try:
+            controller = pynput_keyboard.Controller()
+            with controller.pressed(pynput_keyboard.Key.ctrl):
+                controller.tap(pynput_keyboard.Key.space)
+            logger.debug("已恢复输入法 (Ctrl+Space 回退)")
+        except Exception as e:
+            logger.warning(f"恢复输入法失败: {e}")
+
     def _type_text(self, text: str) -> None:
         """
         通过模拟打字方式输出文本

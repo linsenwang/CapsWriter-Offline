@@ -23,8 +23,9 @@ class ClientConfig:
 
     threshold    = 0.3          # 快捷键触发阈值（秒）
 
-    paste        = True         # 是否以写入剪切板然后模拟 Ctrl-V 粘贴的方式输出结果
+    paste        = False        # 是否以写入剪切板然后模拟 Ctrl-V 粘贴的方式输出结果
     restore_clip = False        # 模拟粘贴后是否恢复剪贴板
+    switch_input_method = True   # 打字输出前是否自动切换到英文输入法（macOS Ctrl+Space），输入完成后恢复
 
     save_transcript = True      # 是否保存转录文本和时间到本地日记文件 (YYYY/MM/DD.md)
     save_audio = False          # 是否保存录音文件
@@ -43,7 +44,7 @@ class ClientConfig:
     hot_rectify = 0.6           # 纠错历史 RAG 匹配阈值（低阈值，用于 LLM 上下文）
     hot_rule = True             # 是否启用自定义规则替换（基于正则表达式）
 
-    llm_enabled = True          # 是否启用 LLM 润色功能，需要配置 LLM/ 目录下的角色文件
+    llm_enabled = False         # 是否启用 LLM 润色功能，需要配置 LLM/ 目录下的角色文件
     llm_stop_key = 'esc'        # 中断 LLM 输出的快捷键
 
     enable_tray = True          # 客户端默认启用托盘图标功能
