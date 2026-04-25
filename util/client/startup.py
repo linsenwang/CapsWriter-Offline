@@ -94,8 +94,8 @@ def setup_client_components(base_dir):
     state = get_state()
     state.initialize()
 
-    # 1. 托盘
-    if Config.enable_tray:
+    # 1. 托盘（macOS 上 pystray 在子线程运行 NSApplication 会导致异常风暴，禁用）
+    if Config.enable_tray and system() != 'Darwin':
         _setup_tray(state, base_dir)
 
     # 2. UI 提示
