@@ -20,6 +20,7 @@ import websockets
 from config_client import ClientConfig as Config
 from util.client.state import console
 from util.client.audio.file_manager import AudioFileManager
+from util.client.audio.processing import apply_audio_gain
 from . import logger
 
 if TYPE_CHECKING:
@@ -56,16 +57,13 @@ class AudioRecorder:
     
     @staticmethod
     def _process_audio(audio_data: np.ndarray) -> np.ndarray:
-        """对音频数据应用增益或峰值归一化"""
-        if Config.audio_normalize:
-            peak = np.max(np.abs(audio_data))
-            if peak > 0:
-                gain = Config.audio_normalize_target / peak
-                return np.clip(audio_data * gain, -1.0, 1.0)
-            return audio_data
-        elif Config.audio_gain != 1.0:
-            return np.clip(audio_data * Config.audio_gain, -1.0, 1.0)
-        return audio_data
+        """对音频数据应用增益或峰值归一化（含软限幅防止削波失真）"""
+        return apply_audio_gain(
+            audio_data,
+            normalize=Config.audio_normalize,
+            normalize_target=Config.audio_normalize_target,
+            gain=Config.audio_gain,
+        )
     
     async def _send_with_semaphore(self, message: dict) -> None:
         """通过信号量限制并发发送消息"""

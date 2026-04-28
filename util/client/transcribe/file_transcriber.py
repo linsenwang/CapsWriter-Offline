@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Optional
 from config_client import ClientConfig as Config
 from util.client.state import console
 from util.client.websocket_manager import WebSocketManager
+from util.client.audio.processing import apply_audio_gain
 from .media_tool import MediaTool
 from .result_handler import ResultHandler
 from . import logger
@@ -109,18 +110,15 @@ class FileTranscriber:
                     prog_str = f'    发送进度：{progress:.2f}s'
                 console.print(prog_str, end='\r')
 
-                # 应用音频处理（峰值归一化或固定增益）
-                if Config.audio_normalize:
-                    audio_array = np.frombuffer(data, dtype=np.float32)
-                    peak = np.max(np.abs(audio_array))
-                    if peak > 0:
-                        gain = Config.audio_normalize_target / peak
-                        audio_array = np.clip(audio_array * gain, -1.0, 1.0)
-                        data = audio_array.tobytes()
-                elif Config.audio_gain != 1.0:
-                    audio_array = np.frombuffer(data, dtype=np.float32)
-                    audio_array = np.clip(audio_array * Config.audio_gain, -1.0, 1.0)
-                    data = audio_array.tobytes()
+                # 应用音频处理（峰值归一化或固定增益，含软限幅防止削波失真）
+                audio_array = np.frombuffer(data, dtype=np.float32)
+                processed = apply_audio_gain(
+                    audio_array,
+                    normalize=Config.audio_normalize,
+                    normalize_target=Config.audio_normalize_target,
+                    gain=Config.audio_gain,
+                )
+                data = processed.tobytes()
 
                 message = {
                     'task_id': self.task_id,

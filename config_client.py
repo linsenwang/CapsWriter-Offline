@@ -52,8 +52,8 @@ class ClientConfig:
     # 日志配置
     log_level = 'INFO'          # 日志级别：'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'
 
-    audio_gain = 1.0            # 固定增益系数（1.0=原样，>1.0=放大，<1.0=衰减）
-    audio_normalize = True      # 是否启用峰值归一化（自动将每段音频的最大振幅调整到接近满幅但不过曝）。启用时会忽略 audio_gain 的固定值
+    audio_gain = 20.0            # 固定增益系数（1.0=原样，>1.0=放大，<1.0=衰减）
+    audio_normalize = False      # 是否启用峰值归一化（自动将每段音频的最大振幅调整到接近满幅但不过曝）。启用时会忽略 audio_gain 的固定值
     audio_normalize_target = 0.95  # 峰值归一化的目标振幅（建议 0.9~0.99，留一点 headroom 防止削波）
 
     mic_seg_duration = 60       # 麦克风听写时分段长度：60秒
