@@ -18,6 +18,7 @@ from watchdog.observers import Observer
 from rich.console import Console
 
 from .hot_phoneme import PhonemeCorrector
+from .config_loader import load_py_config, migrate_txt_to_py
 
 from . import logger
 console = Console(highlight=False)
@@ -39,7 +40,7 @@ class HotwordManager:
             threshold: 纠错阈值
             similar_threshold: 相似度阈值
         """
-        self.file = hotword_file or Path('hot.txt')
+        self.file = hotword_file or Path('hot_config.py')
         self.threshold = threshold
         self.similar_threshold = similar_threshold
 
@@ -71,22 +72,21 @@ class HotwordManager:
         self._load_hot()
         logger.info("热词资源加载完成")
 
-    def _read_file(self) -> str:
-        """读取热词文件"""
-        try:
-            if not self.file.exists():
-                # 缺失则创建空文件
+    def _ensure_config(self) -> Path:
+        """确保配置文件存在，必要时自动迁移旧 TXT 文件"""
+        if not self.file.exists():
+            old_txt = self.file.parent / 'hot.txt'
+            if old_txt.exists():
+                migrate_txt_to_py(old_txt, self.file, 'hotwords')
+            else:
                 self.file.parent.mkdir(parents=True, exist_ok=True)
-                self.file.write_text("# 热词文件单行一个\n", encoding='utf-8')
-                return ""
-            return self.file.read_text(encoding='utf-8')
-        except Exception as e:
-            logger.error(f"读取文件失败 {self.file}: {e}")
-            return ""
+                self.file.write_text("# 热词配置\n# 以 # 开头的行为注释，会被忽略\n\nHOTWORDS = []\n", encoding='utf-8')
+        return self.file
 
     def _load_hot(self) -> None:
-        content = self._read_file()
-        num = self.phoneme_corrector.update_hotwords(content)
+        path = self._ensure_config()
+        hotwords = load_py_config(path, 'HOTWORDS') or []
+        num = self.phoneme_corrector.update_hotwords(hotwords)
         console.print(self._format_msg("热词库", self.file.name, num) + '\n')
 
     def get_corrector(self) -> PhonemeCorrector:

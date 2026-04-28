@@ -29,7 +29,7 @@ class ClientConfig:
 
     save_transcript = True      # 是否保存转录文本和时间到本地日记文件 (YYYY/MM/DD.md)
     save_audio = True          # 是否保存录音文件
-    save_audio_limit = 10       # 最多保留多少条录音文件（用于排查错误，0 表示不限制）
+    save_audio_limit = 0       # 最多保留多少条录音文件（用于排查错误，0 表示不限制）
     audio_name_len = 20         # 将录音识别结果的前多少个字存储到录音文件名中，建议不要超过200
     
     context = ''                # 提示词上下文，用于辅助 Fun-ASR-Nano 模型识别（例如输入人名、地名、专业术语等）

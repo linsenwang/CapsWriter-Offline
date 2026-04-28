@@ -91,7 +91,7 @@ class ModelManager:
             hw_path = self.config.hotwords_path
             if not hw_path:
                 script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                hw_path = os.path.join(script_dir, "hot.txt")
+                hw_path = os.path.join(script_dir, "hot_config.py")
                 
             self.hotword_manager = get_hotword_manager(
                 hotword_file=Path(hw_path),

@@ -585,8 +585,21 @@ corrector.update_hotwords(hotwords_data)
 rectifier.load_rectify_text(rectify_data)
 
 # 尝试加载外部文件 (如果存在)
-corrector.load_hotwords_file("hot.txt")
-rectifier.load_rectify_file("hot-rectify.txt")
+# 优先加载新的 .py 配置文件，回退到旧的 .txt
+try:
+    from pathlib import Path
+    from .config_loader import load_py_config
+    if Path("hot_config.py").exists():
+        corrector.update_hotwords(load_py_config(Path("hot_config.py"), "HOTWORDS") or [])
+    else:
+        corrector.load_hotwords_file("hot.txt")
+    if Path("hot_rectify_config.py").exists():
+        rectifier.load_data(load_py_config(Path("hot_rectify_config.py"), "RECTIFICATIONS") or [])
+    else:
+        rectifier.load_rectify_file("hot-rectify.txt")
+except Exception:
+    corrector.load_hotwords_file("hot.txt")
+    rectifier.load_rectify_file("hot-rectify.txt")
 
 # --- C. 执行综合纠错演示 ---
 print("\n" + "="*50)

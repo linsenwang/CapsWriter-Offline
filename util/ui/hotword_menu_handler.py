@@ -62,30 +62,19 @@ def on_add_hotword():
 
 def _save_hotwords(text: str) -> None:
     """
-    保存热词到 hot.txt
+    保存热词到 hot_config.py
 
     Args:
         text: 热词文本（支持多行）
     """
-    hot_file = Path('hot.txt')
+    from util.hotword.config_loader import append_to_py_list
     
-    # 确保文件存在
-    if not hot_file.exists():
-        hot_file.touch()
-
-    # 读取现有内容，检查最后是否有换行
-    content = hot_file.read_text(encoding='utf-8')
-    needs_newline = content and not content.endswith('\n')
-
-    # 追加记录到文件
-    with open(hot_file, 'a', encoding='utf-8') as f:
-        if needs_newline:
-            f.write('\n')
-        
-        # 处理每一行
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        for line in lines:
-            f.write(f"{line}\n")
+    hot_file = Path('hot_config.py')
+    
+    # 处理每一行
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    for line in lines:
+        append_to_py_list(hot_file, 'HOTWORDS', line)
 
     logger.debug(f"已追加 {len(lines)} 个热词到 {hot_file}")
 

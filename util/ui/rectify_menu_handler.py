@@ -79,17 +79,18 @@ def on_add_rectify_record():
 
 def _save_rectify_record(original: str, corrected: str) -> None:
     """
-    保存纠错记录到 hot-rectify.txt
+    保存纠错记录到 hot_rectify_config.py
 
     Args:
         original: 原始文本（识别出来的错误文本）
         corrected: 纠错文本（正确的文本）
     """
-    rectify_file = Path('hot-rectify.txt')
+    from util.hotword.config_loader import append_to_py_list
+    
+    rectify_file = Path('hot_rectify_config.py')
 
     # 追加记录到文件
-    with open(rectify_file, 'a', encoding='utf-8') as f:
-        f.write(f"\n{original}\n{corrected}\n---\n")
+    append_to_py_list(rectify_file, 'RECTIFICATIONS', {'wrong': original, 'right': corrected})
 
     logger.debug(f"已追加纠错记录到 {rectify_file}")
 

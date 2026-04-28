@@ -64,7 +64,7 @@ class ModelPaths:
     fun_asr_nano_gguf_ctc = fun_asr_nano_gguf_dir / 'Fun-ASR-Nano-CTC.int4.onnx'
     fun_asr_nano_gguf_llm_decode = fun_asr_nano_gguf_dir / 'Fun-ASR-Nano-Decoder.q5_k.gguf'
     fun_asr_nano_gguf_token = fun_asr_nano_gguf_dir / 'tokens.txt'
-    fun_asr_nano_gguf_hotwords = Path() / 'hot-server.txt'
+    fun_asr_nano_gguf_hotwords = Path() / 'hot_server_config.py'
 
     # Qwen3-ASR 模型路径，自带标点
     qwen3_asr_gguf_dir = model_dir / 'Qwen3-ASR' / 'Qwen3-ASR-1.7B'

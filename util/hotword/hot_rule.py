@@ -32,27 +32,34 @@ class RuleCorrector:
         self.patterns: Dict[str, str] = {}
         self._lock = Lock()
 
-    def update_rules(self, rule_text: str) -> int:
+    def update_rules(self, rules) -> int:
         """
         更新规则词典（线程安全）
 
         Args:
-            rule_text: 规则文本，每行一条，格式为 "正则模式 = 替换文本"
+            rules: 规则文本字符串，或 (pattern, replacement) 列表/元组
 
         Returns:
             加载的规则数量
         """
         new_patterns = {}
 
-        for line in rule_text.splitlines():
-            if not line or line.startswith('#'):
-                continue
+        if isinstance(rules, str):
+            for line in rules.splitlines():
+                if not line or line.startswith('#'):
+                    continue
 
-            parts = line.split(' = ')
-            if len(parts) == 2:
-                pattern = parts[0].strip()
-                replacement = parts[1].strip()
-                new_patterns[pattern] = replacement
+                parts = line.split('=', 1)
+                if len(parts) == 2:
+                    pattern = parts[0].strip()
+                    replacement = parts[1].strip()
+                    new_patterns[pattern] = replacement
+        else:
+            for item in rules:
+                if isinstance(item, (tuple, list)) and len(item) >= 2:
+                    new_patterns[item[0]] = item[1]
+                elif isinstance(item, dict) and 'pattern' in item and 'replacement' in item:
+                    new_patterns[item['pattern']] = item['replacement']
 
         with self._lock:
             self.patterns = new_patterns

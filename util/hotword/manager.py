@@ -20,6 +20,7 @@ from rich.console import Console
 from .hot_rule import RuleCorrector
 from .hot_phoneme import PhonemeCorrector
 from .hot_rectification import RectificationRAG
+from .config_loader import load_py_config, migrate_txt_to_py
 
 # 尝试导入主项目的统一组件，失败则使用本地默认值（独立运行模式）
 try:
@@ -68,9 +69,9 @@ class HotwordManager:
             similar_threshold: 相似度阈值
         """
         self.files = hotword_files or {
-            'hot': Path('hot.txt'),
-            'rule': Path('hot-rule.txt'),
-            'rectify': Path('hot-rectify.txt'),
+            'hot': Path('hot_config.py'),
+            'rule': Path('hot_rule_config.py'),
+            'rectify': Path('hot_rectify_config.py'),
         }
         
         self.threshold = threshold
@@ -113,36 +114,53 @@ class HotwordManager:
         self._load_rectify()
         logger.info("热词资源加载完成")
 
-    def _read_file(self, key: str) -> str:
-        """读取文件的统一辅助函数"""
+    # 旧 TXT 文件名映射（用于自动迁移）
+    _OLD_TXT_MAP = {
+        'hot': 'hot.txt',
+        'rule': 'hot-rule.txt',
+        'rectify': 'hot-rectify.txt',
+    }
+
+    def _ensure_config(self, key: str, config_type: str) -> Path:
+        """确保配置文件存在，必要时自动迁移旧 TXT 文件"""
         path = self.files.get(key)
-        if not path: return ""
-        try:
-            if not path.exists():
-                # 缺失则创建空文件
+        if not path:
+            return Path()
+        if not path.exists():
+            # 尝试迁移旧 TXT 文件
+            old_txt_name = self._OLD_TXT_MAP.get(key)
+            old_txt = path.parent / old_txt_name if old_txt_name else path.with_suffix('.txt')
+            if old_txt.exists():
+                migrate_txt_to_py(old_txt, path, config_type)
+            else:
+                # 创建空的 .py 配置文件
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("# 热词文件单行一个\n", encoding='utf-8')
-                return ""
-            return path.read_text(encoding='utf-8')
-        except Exception as e:
-            logger.error(f"读取文件失败 {path}: {e}")
-            return ""
+                if config_type == 'hotwords':
+                    path.write_text("# 热词配置\n# 以 # 开头的行为注释，会被忽略\n\nHOTWORDS = []\n", encoding='utf-8')
+                elif config_type == 'rules':
+                    path.write_text("# 规则替换配置\n# 每个元组: (正则模式, 替换文本)\n# 替换文本为空字符串 \"\" 表示删除匹配内容\n\nRULES = []\n", encoding='utf-8')
+                elif config_type == 'rectifications':
+                    path.write_text('# 纠错历史配置\n# 每条记录是一个字典，包含 "wrong" 和 "right"\n\nRECTIFICATIONS = []\n', encoding='utf-8')
+        return path
 
     def _load_hot(self) -> None:
-        content = self._read_file('hot')
-        num = self.phoneme_corrector.update_hotwords(content)
-        console.print(self._format_msg("热词库", "hot.txt", num))
+        path = self._ensure_config('hot', 'hotwords')
+        hotwords = load_py_config(path, 'HOTWORDS') or []
+        num = self.phoneme_corrector.update_hotwords(hotwords)
+        console.print(self._format_msg("热词库", path.name, num))
 
     def _load_rule(self) -> None:
-        content = self._read_file('rule')
-        num = self.rule_corrector.update_rules(content)
-        console.print(self._format_msg("规则库", "hot-rule.txt", num))
+        path = self._ensure_config('rule', 'rules')
+        rules = load_py_config(path, 'RULES') or []
+        num = self.rule_corrector.update_rules(rules)
+        console.print(self._format_msg("规则库", path.name, num))
 
     def _load_rectify(self) -> None:
-        # RectificationRAG 目前是自己加载的，保持其接口一致性
-        self.rectify_rag.load_history()
+        path = self._ensure_config('rectify', 'rectifications')
+        rectifications = load_py_config(path, 'RECTIFICATIONS') or []
+        self.rectify_rag.load_data(rectifications)
         count = len(self.rectify_rag.records) if hasattr(self.rectify_rag, 'records') else 0
-        console.print(self._format_msg("纠错历史", "hot-rectify.txt", count))
+        console.print(self._format_msg("纠错历史", path.name, count))
 
     def get_phoneme_corrector(self) -> PhonemeCorrector:
         return self.phoneme_corrector

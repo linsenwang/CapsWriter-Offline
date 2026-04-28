@@ -104,9 +104,9 @@ def setup_client_components(base_dir):
     # 3. 热词
     logger.info("正在加载热词...")
     hotword_files = {
-        'hot': Path('hot.txt'),
-        'rule': Path('hot-rule.txt'),
-        'rectify': Path('hot-rectify.txt'),
+        'hot': Path('hot_config.py'),
+        'rule': Path('hot_rule_config.py'),
+        'rectify': Path('hot_rectify_config.py'),
     }
     hotword_manager = get_hotword_manager(
         hotword_files=hotword_files,

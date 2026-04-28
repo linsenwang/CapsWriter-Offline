@@ -39,7 +39,7 @@ encoder_onnx_path = f"{model_dir}/Fun-ASR-Nano-Encoder-Adaptor.fp32.onnx"
 ctc_onnx_path = f"{model_dir}/Fun-ASR-Nano-CTC.int8.onnx"
 decoder_gguf_path = f"{model_dir}/Fun-ASR-Nano-Decoder.q8_0.gguf"
 tokens_path = f"{model_dir}/tokens.txt"
-hotwords_path = "./hot.txt"  # 可选，留空则不使用热词
+hotwords_path = "./hot_config.py"  # 可选，留空则不使用热词
 
 # ==================== 语言说明 ====================
 

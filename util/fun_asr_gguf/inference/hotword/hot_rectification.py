@@ -162,15 +162,13 @@ class RectificationRAG:
         初始化
 
         Args:
-            rectify_file: 纠错历史文件路径
+            rectify_file: 纠错历史文件路径（向后兼容，不再自动加载）
             threshold: 相似度阈值（默认0.5）
         """
-        self.rectify_file = Path(rectify_file)
+        self.rectify_file = Path(rectify_file) if rectify_file else None
         self.threshold = threshold
         self.records: List[RectifyRecord] = []
         self._lock = threading.Lock()
-        
-        self.load_history()
         
     def load_history(self):
         """加载纠错历史
@@ -241,6 +239,38 @@ class RectificationRAG:
                 
         except Exception as e:
             logger.error(f"加载纠错历史失败: {e}")
+
+    def load_data(self, data: List[dict]) -> None:
+        """
+        从 Python 数据结构加载纠错记录
+
+        Args:
+            data: 字典列表，每个字典需包含 'wrong' 和 'right' 键
+        """
+        new_records = []
+        start_time = time.time()
+
+        for rec in data:
+            wrong = rec.get('wrong', '')
+            right = rec.get('right', '')
+
+            if wrong and right:
+                fragments = extract_diff_fragments(wrong, right)
+                if not fragments:
+                    fragments = [wrong]
+
+                record = RectifyRecord(wrong, right, fragments)
+                new_records.append(record)
+                logger.debug(f"加载纠错: '{wrong}' => '{right}', 检索词: {fragments}")
+
+        with self._lock:
+            self.records = new_records
+
+        count = len(new_records)
+        if count > 0:
+            total_fragments = sum(len(r.fragments) for r in new_records)
+            logger.debug(f"已加载 {count} 条纠错历史，{total_fragments} 个检索片段，耗时 {time.time() - start_time:.3f}s")
+            logger.info(f"已载入 {count} 条 LLM 纠错历史")
 
     def _score_record(self, input_phonemes: List[Phoneme], record: RectifyRecord) -> Tuple[float, List[dict]]:
         """计算单条记录与输入音素序列的匹配得分及片段详情"""
