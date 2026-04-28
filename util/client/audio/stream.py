@@ -54,6 +54,7 @@ class AudioStreamManager:
         self.state = state
         self._channels = 1
         self._running = False  # 标志是否应该运行
+        self._current_device_index: Optional[int] = None  # 当前使用的设备索引
     
     def _audio_callback(
         self,
@@ -96,6 +97,53 @@ class AudioStreamManager:
         else:
             logger.debug("音频流已正常结束")
     
+    def get_default_device_index(self) -> Optional[int]:
+        """获取当前系统默认输入设备索引"""
+        try:
+            return sd.default.device[0]
+        except Exception:
+            return None
+    
+    def _resolve_device(self) -> tuple[Optional[int], str]:
+        """
+        根据配置解析要使用的设备索引和名称
+        
+        如果配置了 mic_device_name，优先查找匹配的设备（不区分大小写，部分匹配）。
+        找不到时自动回落到系统默认设备。
+        
+        Returns:
+            (设备索引, 设备名称)。索引为 None 表示使用系统默认。
+        """
+        from config_client import ClientConfig as Config
+        
+        if Config.mic_device_name:
+            try:
+                devices = sd.query_devices()
+                for i, d in enumerate(devices):
+                    if d.get('max_input_channels', 0) > 0:
+                        name = d.get('name', '')
+                        if Config.mic_device_name.lower() in name.lower():
+                            return i, name
+            except Exception as e:
+                logger.warning(f"查找指定麦克风时出错: {e}")
+            logger.warning(f"未找到配置的麦克风 '{Config.mic_device_name}'，将使用系统默认设备")
+        
+        try:
+            device = sd.query_devices(kind='input')
+            default_idx = self.get_default_device_index()
+            return default_idx, device.get('name', '默认设备')
+        except UnicodeDecodeError:
+            return None, '未知设备（编码问题）'
+        except sd.PortAudioError:
+            return None, ''
+    
+    def is_device_changed(self) -> bool:
+        """检测当前应使用的音频输入设备是否已发生变化"""
+        if self._current_device_index is None:
+            return True
+        new_index, _ = self._resolve_device()
+        return new_index != self._current_device_index
+    
     def open(self) -> Optional[sd.InputStream]:
         """
         打开音频流
@@ -103,35 +151,38 @@ class AudioStreamManager:
         Returns:
             创建的音频输入流，如果失败返回 None
         """
-        # 检测音频设备
-        try:
-            device = sd.query_devices(kind='input')
-            self._channels = min(2, device['max_input_channels'])
-            device_name = device.get('name', '未知设备')
-            console.print(
-                f'使用默认音频设备：[italic]{device_name}，声道数：{self._channels}',
-                end='\n\n'
-            )
-            logger.info(f"找到音频设备: {device_name}, 声道数: {self._channels}")
-        except UnicodeDecodeError:
-            console.print(
-                "由于编码问题，暂时无法获得麦克风设备名字",
-                end='\n\n',
-                style='bright_red'
-            )
-            logger.warning("无法获取音频设备名称（编码问题）")
-        except sd.PortAudioError:
+        # 解析目标设备（优先使用配置的 mic_device_name，找不到则回落到默认）
+        device_index, device_name = self._resolve_device()
+        
+        if device_name == '':
             console.print("没有找到麦克风设备", end='\n\n', style='bright_red')
             logger.error("未找到麦克风设备")
             input('按回车键退出')
             sys.exit(1)
+        
+        # 获取设备详情以确定声道数
+        try:
+            if device_index is not None:
+                device_info = sd.query_devices(device_index)
+                self._channels = min(2, device_info['max_input_channels'])
+            else:
+                device_info = sd.query_devices(kind='input')
+                self._channels = min(2, device_info['max_input_channels'])
+        except Exception:
+            self._channels = 1
+        
+        console.print(
+            f'使用音频设备：[italic]{device_name}，声道数：{self._channels}',
+            end='\n\n'
+        )
+        logger.info(f"找到音频设备: {device_name}, 声道数: {self._channels}")
         
         # 创建音频流
         try:
             stream = sd.InputStream(
                 samplerate=self.SAMPLE_RATE,
                 blocksize=int(self.BLOCK_DURATION * self.SAMPLE_RATE),
-                device=None,
+                device=device_index,
                 dtype="float32",
                 channels=self._channels,
                 callback=self._audio_callback,
@@ -141,9 +192,11 @@ class AudioStreamManager:
             
             self.state.stream = stream
             self._running = True
+            self._current_device_index = device_index
             logger.debug(
                 f"音频流已启动: 采样率={self.SAMPLE_RATE}, "
-                f"块大小={int(self.BLOCK_DURATION * self.SAMPLE_RATE)}"
+                f"块大小={int(self.BLOCK_DURATION * self.SAMPLE_RATE)}, "
+                f"设备索引={device_index}"
             )
             return stream
             

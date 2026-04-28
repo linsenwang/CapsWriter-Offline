@@ -67,10 +67,20 @@ class ShortcutTask:
         """启动录音任务"""
         self.state.update_activity()
 
-        # 如果麦克风因空闲被释放，先重新打开音频流
-        if self.state.stream is None and self.state.stream_manager:
+        # 判断是否需要重新打开音频流：
+        # 1. 麦克风因空闲被释放（stream 为 None）
+        # 2. 系统默认音频设备发生了变化（如插拔麦克风）
+        stream_manager = self.state.stream_manager
+        need_reopen = False
+        if self.state.stream is None and stream_manager:
+            need_reopen = True
             logger.info("麦克风已释放，正在重新打开...")
-            stream = self.state.stream_manager.open()
+        elif stream_manager and stream_manager.is_device_changed():
+            need_reopen = True
+            logger.info("检测到默认音频设备发生变化，正在重新打开...")
+        
+        if need_reopen and stream_manager:
+            stream = stream_manager.reopen()
             if stream is None:
                 logger.error("重新打开麦克风失败，无法开始录音")
                 return

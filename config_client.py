@@ -81,6 +81,8 @@ class ClientConfig:
     idle_timeout = 10               # 空闲超时时间（秒），超过此时间无操作则释放麦克风
     idle_check_interval = 1         # 空闲检查间隔（秒），建议设为 1~5 秒
 
+    mic_device_name = 'Wireless Mic Rx'  # 优先使用的麦克风名称（部分匹配），找不到时自动回落到系统默认麦克风。设为 None 则始终使用系统默认
+
 
 # 快捷键配置说明
 r"""
