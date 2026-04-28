@@ -53,6 +53,7 @@ class LLMProcessor:
             (处理后的文本, 输出token数, 生成时间秒)
         """
         logger.info(f"开始 LLM 处理，模型: {role_config.model}")
+        start_time = time.time()
 
         # 获取客户端
         logger.debug(f"获取 LLM 客户端，提供商: {role_config.provider}, API: {role_config.api_url}")
@@ -73,7 +74,8 @@ class LLMProcessor:
                 should_stop_check,
                 role_config,
                 context_manager,
-                messages
+                messages,
+                start_time
             )
 
         except OpenAIErrorWrapper:
@@ -98,13 +100,17 @@ class LLMProcessor:
             # 捕获 OpenAI SDK 原生异常并包装
             import openai
 
-            # 处理 httpx 超时异常（在流式读取时发生）
+            # 处理 httpx 异常（超时、连接失败等）
             if 'httpx' in str(type(e).__module__):
                 error_type = type(e).__name__
                 if 'Timeout' in error_type or 'timeout' in error_type:
                     # httpx.ReadTimeout 或 httpx.TimeoutException
                     wrapped_error = TimeoutErrorWrapper(e, role_config.provider)
                     logger.error(f"LLM API 请求超时: {wrapped_error}")
+                    raise wrapped_error from e
+                if 'Connect' in error_type:
+                    wrapped_error = ConnectionErrorWrapper(e, role_config.provider)
+                    logger.error(f"LLM API 连接失败: {wrapped_error}")
                     raise wrapped_error from e
 
             if isinstance(e, (
@@ -164,7 +170,8 @@ class LLMProcessor:
         should_stop_check: Optional[Callable[[], bool]],
         role_config: RoleConfig,
         context_manager: Optional[IContextManager],
-        messages: List[Dict[str, str]]
+        messages: List[Dict[str, str]],
+        start_time: float
     ) -> Tuple[str, int, float]:
         """执行流式请求并协调不同处理引擎"""
         
@@ -178,6 +185,16 @@ class LLMProcessor:
             )
 
         full_response, total_tokens, generation_time = result
+
+        # 记录处理完成信息
+        total_time = time.time() - start_time
+        speed = total_tokens / generation_time if generation_time > 0 and total_tokens > 0 else 0
+        logger.info(
+            f"LLM 处理完成，模型: {role_config.model}, "
+            f"总耗时: {total_time:.2f}s, 生成时间: {generation_time:.2f}s, "
+            f"输出 tokens: {total_tokens}, 速度: {speed:.1f} tokens/s"
+        )
+        logger.info(f"LLM 输出结果: {full_response}")
 
         # Token 估算兜底（针对 Ollama 等不返回 usage 的提供商）
         if total_tokens == 0 and full_response:

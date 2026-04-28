@@ -54,9 +54,13 @@ async def handle_toast_mode(text: str, role_config=None, matched_hotwords=None, 
         toast_window = await toast_manager.wait_for_window(msg_id, timeout=1.0)
 
         if not toast_window:
-            logger.error("Toast 窗口创建失败")
+            logger.error("Toast 窗口创建失败，降级到打字输出")
             if msg_id: toast_manager.close_toast(msg_id)
-            return ("", 0, 0.0)
+            # 降级到打字输出，避免静默失败
+            from util.llm.llm_output_typing import output_text
+            from config_client import ClientConfig as Config
+            await output_text(content, Config.paste)
+            return (content, 0, 0.0)
 
         chunks = []
         def stream_toast_chunk(chunk: str):
