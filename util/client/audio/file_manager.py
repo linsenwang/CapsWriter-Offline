@@ -13,10 +13,11 @@ import shutil
 import tempfile
 import time
 import wave
+from collections import deque
 from os import makedirs
 from pathlib import Path
 from subprocess import DEVNULL, PIPE, Popen
-from typing import Optional, Tuple, Union
+from typing import ClassVar, Optional, Tuple, Union
 
 import numpy as np
 
@@ -40,6 +41,7 @@ class AudioFileManager:
     """
     
     SAMPLE_RATE = 48000
+    _saved_audio_files: ClassVar[deque] = deque()
     
     def __init__(self):
         """初始化音频文件管理器"""
@@ -151,6 +153,32 @@ class AudioFileManager:
         
         return self.file_path
     
+    @classmethod
+    def _register_saved_file(cls, file_path: Path) -> None:
+        """注册已保存的音频文件，超出限制时删除最早的文件（基于磁盘扫描，重启后也有效）"""
+        limit = getattr(Config, 'save_audio_limit', 0)
+        if limit <= 0:
+            return
+        
+        # 扫描当前目录下所有录音文件（文件名以 '(' 开头，后缀为 mp3/wav）
+        all_files = []
+        for ext in ('*.mp3', '*.wav'):
+            for f in Path().rglob(ext):
+                if f.name.startswith('(') and f.exists():
+                    all_files.append(f)
+        
+        # 按修改时间排序，旧的在前
+        all_files.sort(key=lambda p: p.stat().st_mtime)
+        
+        # 删除超出限制的旧文件
+        while len(all_files) > limit:
+            old_path = all_files.pop(0)
+            try:
+                old_path.unlink()
+                logger.debug(f"删除旧录音文件: {old_path}")
+            except Exception as e:
+                logger.warning(f"删除旧录音文件失败: {e}")
+
     def rename(self, text: str, time_start: float) -> Optional[Path]:
         """
         根据识别文本重命名音频文件
@@ -180,7 +208,8 @@ class AudioFileManager:
             self.file_path.rename(new_path)
             logger.debug(f"音频文件已重命名: {self.file_path.name} -> {new_path.name}")
             self.file_path = new_path
-            return new_path
         except Exception as e:
             logger.error(f"重命名音频文件失败: {e}")
-            return self.file_path
+        
+        self._register_saved_file(self.file_path)
+        return self.file_path

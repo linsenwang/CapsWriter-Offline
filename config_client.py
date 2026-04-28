@@ -28,7 +28,8 @@ class ClientConfig:
     switch_input_method = True   # 打字输出前是否自动切换到英文输入法（macOS Ctrl+Space），输入完成后恢复
 
     save_transcript = True      # 是否保存转录文本和时间到本地日记文件 (YYYY/MM/DD.md)
-    save_audio = False          # 是否保存录音文件
+    save_audio = True          # 是否保存录音文件
+    save_audio_limit = 10       # 最多保留多少条录音文件（用于排查错误，0 表示不限制）
     audio_name_len = 20         # 将录音识别结果的前多少个字存储到录音文件名中，建议不要超过200
     
     context = ''                # 提示词上下文，用于辅助 Fun-ASR-Nano 模型识别（例如输入人名、地名、专业术语等）
