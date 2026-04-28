@@ -12,6 +12,8 @@ import base64
 import json
 import time
 import uuid
+
+import numpy as np
 import websockets
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -106,6 +108,19 @@ class FileTranscriber:
                 else:
                     prog_str = f'    发送进度：{progress:.2f}s'
                 console.print(prog_str, end='\r')
+
+                # 应用音频处理（峰值归一化或固定增益）
+                if Config.audio_normalize:
+                    audio_array = np.frombuffer(data, dtype=np.float32)
+                    peak = np.max(np.abs(audio_array))
+                    if peak > 0:
+                        gain = Config.audio_normalize_target / peak
+                        audio_array = np.clip(audio_array * gain, -1.0, 1.0)
+                        data = audio_array.tobytes()
+                elif Config.audio_gain != 1.0:
+                    audio_array = np.frombuffer(data, dtype=np.float32)
+                    audio_array = np.clip(audio_array * Config.audio_gain, -1.0, 1.0)
+                    data = audio_array.tobytes()
 
                 message = {
                     'task_id': self.task_id,

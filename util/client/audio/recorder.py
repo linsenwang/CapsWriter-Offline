@@ -54,11 +54,23 @@ class AudioRecorder:
         # 限制并发发送任务数量，防止 WebSocket 阻塞时 task 无限累积
         self._send_semaphore = asyncio.Semaphore(8)
     
+    @staticmethod
+    def _process_audio(audio_data: np.ndarray) -> np.ndarray:
+        """对音频数据应用增益或峰值归一化"""
+        if Config.audio_normalize:
+            peak = np.max(np.abs(audio_data))
+            if peak > 0:
+                gain = Config.audio_normalize_target / peak
+                return np.clip(audio_data * gain, -1.0, 1.0)
+            return audio_data
+        elif Config.audio_gain != 1.0:
+            return np.clip(audio_data * Config.audio_gain, -1.0, 1.0)
+        return audio_data
+    
     async def _send_with_semaphore(self, message: dict) -> None:
         """通过信号量限制并发发送消息"""
         async with self._send_semaphore:
             await self._send_message(message)
-
     async def _send_message(self, message: dict) -> None:
         """发送消息到服务端"""
         websocket = self.state.websocket
@@ -144,6 +156,9 @@ class AudioRecorder:
                     else:
                         data = task['data']
                     
+                    # 应用音频处理（增益/归一化）
+                    data = self._process_audio(data)
+                    
                     # 保存音频至本地文件
                     self._duration += len(data) / 48000
                     if Config.save_audio and self._file_manager:
@@ -171,6 +186,9 @@ class AudioRecorder:
                     if self._cache:
                         data = np.concatenate(self._cache)
                         self._cache.clear()
+                        
+                        # 应用音频处理（增益/归一化）
+                        data = self._process_audio(data)
                         
                         self._duration += len(data) / 48000
                         if Config.save_audio and self._file_manager:
