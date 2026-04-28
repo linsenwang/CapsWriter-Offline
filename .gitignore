@@ -189,3 +189,4 @@ release
 *.dll 
 *.exe
 status.json
+ecosystem.config.js
