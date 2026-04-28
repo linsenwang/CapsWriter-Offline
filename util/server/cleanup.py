@@ -14,6 +14,7 @@ from . import logger
 from util.common.lifecycle import lifecycle
 from util.server.state import get_state
 from util.ui.tray import stop_tray
+from util.server.ollama_lifecycle import ollama_lifecycle
 
 console = Console(highlight=False)
 
@@ -60,7 +61,10 @@ def cleanup_server_resources():
     elif _recognize_process:
         logger.info("识别进程已退出")
 
-    # 3. 停止托盘图标
+    # 3. 卸载 Ollama 模型，释放 GPU 内存
+    ollama_lifecycle.unload()
+
+    # 4. 停止托盘图标
     stop_tray()
 
     logger.info("服务端资源清理完成")

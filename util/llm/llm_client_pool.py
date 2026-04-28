@@ -45,6 +45,7 @@ class ClientPool:
                 self._clients[cache_key] = OllamaClient(
                     host=final_url,
                     timeout=timeout,
+                    trust_env=False,
                 )
             else:
                 self._clients[cache_key] = OpenAI(

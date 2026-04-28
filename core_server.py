@@ -10,6 +10,7 @@ from util.logger import setup_logger
 from util.common.lifecycle import lifecycle
 from util.server.cleanup import setup_tray, print_banner, cleanup_server_resources, console
 from util.server.service import start_recognizer_process
+from util.server.ollama_lifecycle import ollama_lifecycle
 import logging
 
 BASE_DIR = os.path.dirname(__file__); os.chdir(BASE_DIR)
@@ -101,6 +102,11 @@ def init():
 
     try:
         start_recognizer_process()
+
+        # 启动 Ollama 模型生命周期管理（加载模型并设为常驻）
+        if Config.ollama_model:
+            ollama_lifecycle.initialize(Config.ollama_model)
+
         asyncio.run(run_websocket_server())
         # 正常退出后的显式清理
         lifecycle.cleanup()

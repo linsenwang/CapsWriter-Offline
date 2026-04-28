@@ -210,13 +210,14 @@ class LLMProcessor:
             if k in ['temperature', 'top_p', 'stop', 'num_predict']
         }
         
-        # 2. 发起请求
+        # 2. 发起请求（keep_alive=-1 保证服务运行期间模型常驻，不被默认 5 分钟自动卸载）
         stream = client.chat(
             model=role_config.model,
             messages=messages,
             stream=True,
             options=ollama_options,
-            think=role_config.enable_thinking
+            think=role_config.enable_thinking,
+            keep_alive=-1,
         )
 
         # 3. 迭代处理
