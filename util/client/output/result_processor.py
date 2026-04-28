@@ -18,6 +18,7 @@ from util.client.state import console
 from util.client.websocket_manager import WebSocketManager
 from util.hotword import get_hotword_manager
 from util.client.output.text_output import TextOutput
+from util.client.voice_command import VoiceCommandManager
 from util.tools.window_detector import get_active_window_info
 from . import logger
 from util.common.lifecycle import lifecycle
@@ -60,6 +61,7 @@ class ResultProcessor:
         self._ws_manager = WebSocketManager(state)
         self._hotword_manager = get_hotword_manager()
         self._text_output = TextOutput()
+        self._voice_cmd_manager = VoiceCommandManager(Config.voice_commands)
         self._exit_event = asyncio.Event()
         self._loop = asyncio.get_running_loop()  # 保存事件循环引用
         
@@ -256,6 +258,19 @@ class ResultProcessor:
 
         # 保存最近一次识别结果
         self.state.last_recognition_text = text
+
+        # 语音命令匹配检查
+        matched_cmd = self._voice_cmd_manager.match(text)
+        if matched_cmd:
+            console.print(f'    语音命令：[cyan]{matched_cmd.raw_pattern}[/cyan] -> [green]{matched_cmd.target}[/green]')
+            success = self._voice_cmd_manager.execute(matched_cmd)
+            if success:
+                console.print('    命令执行成功')
+            else:
+                console.print('    [red]命令执行失败[/red]')
+            console.line()
+            # 语音命令执行后，跳过文本输出、录音保存、日记等后续流程
+            return
 
         # 控制台输出
         console.print(f'    转录时延：{delay:.2f}s')

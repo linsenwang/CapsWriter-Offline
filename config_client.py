@@ -84,6 +84,20 @@ class ClientConfig:
 
     mic_device_name = 'Wireless Mic Rx'  # 优先使用的麦克风名称（部分匹配），找不到时自动回落到系统默认麦克风。设为 None 则始终使用系统默认
 
+    # 语音命令配置
+    # 当识别结果匹配到对应正则时，执行指定动作，而不是输出文本
+    # action 目前仅支持 'open'：打开网址或应用程序
+    # target 可以是网址 (https://...) 或本地路径
+    voice_commands = [
+        # 示例：打开网页
+        {'pattern': r'打开\s*It\s*之家', 'action': 'open', 'target': 'https://www.ithome.com'},
+        # {'pattern': r'打开\s*GitHub',   'action': 'open', 'target': 'https://github.com'},
+        # 示例：打开应用（macOS）
+        # {'pattern': r'打开\s*微信',     'action': 'open', 'target': '/Applications/WeChat.app'},
+        # 示例：打开应用（Windows）
+        # {'pattern': r'打开\s*记事本',   'action': 'open', 'target': 'notepad'},
+    ]
+
 
 # 快捷键配置说明
 r"""
