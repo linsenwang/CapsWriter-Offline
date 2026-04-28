@@ -23,6 +23,9 @@ class ServerConfig:
 
     enable_tray = True        # 是否启用托盘图标功能
 
+    # Ollama 模型生命周期管理（跟随服务启停加载/卸载，避免停服后仍占 GPU）
+    ollama_model = 'qwen3.5:9b'   # 留空则禁用自动管理
+
     # 日志配置
     log_level = 'INFO'        # 日志级别：'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'
 
