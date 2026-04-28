@@ -36,6 +36,7 @@ class TextOutput:
     
     def __init__(self):
         self._previous_input_source = None
+        self._switched = False
         self._tool_available = self._check_tool_available()
     
     @staticmethod
@@ -92,10 +93,15 @@ class TextOutput:
             await self._paste_text(text)
         else:
             # 打字模式：先切换到英文输入法，再打字，最后恢复
+            self._switched = False
             if Config.switch_input_method:
                 self._switch_to_english()
             try:
                 self._type_text(text)
+                # 打字完成后等待一小段时间，确保系统事件队列中的按键事件被处理完
+                # 再恢复输入法，避免恢复事件追上打字事件导致末尾字符被中文输入法拦截
+                if self._switched:
+                    await asyncio.sleep(min(1.0, 0.5 + len(text) * 0.01))
             finally:
                 if Config.switch_input_method:
                     self._switch_back_input()
@@ -186,6 +192,7 @@ class TextOutput:
         if not self._tool_available:
             # 回退到 Ctrl+Space 模拟
             self._switch_to_english_fallback()
+            self._switched = True
             return
         
         # 记录当前输入法
@@ -199,6 +206,7 @@ class TextOutput:
         
         if self._select_input_source(_ENGLISH_INPUT_SOURCE):
             logger.info("已切换到英文输入法 (ABC)")
+            self._switched = True
         else:
             logger.warning("切换到英文输入法失败")
 
@@ -210,18 +218,26 @@ class TextOutput:
         """
         logger.info(f"准备恢复输入法，工具可用: {self._tool_available}")
         
+        # 只有真正发生了切换才恢复
+        if not self._switched:
+            logger.info("本次未发生输入法切换，无需恢复")
+            return
+        
         if not self._tool_available:
             self._switch_back_input_fallback()
+            self._switched = False
             return
         
         if not self._previous_input_source:
             logger.info("没有记录的输入法需要恢复")
+            self._switched = False
             return
         
         # 如果之前就是英文，不需要恢复
         if self._previous_input_source == _ENGLISH_INPUT_SOURCE:
             logger.info("之前就是英文输入法，无需恢复")
             self._previous_input_source = None
+            self._switched = False
             return
         
         if self._select_input_source(self._previous_input_source):
@@ -230,6 +246,7 @@ class TextOutput:
             logger.warning(f"恢复输入法失败: {self._previous_input_source}")
         
         self._previous_input_source = None
+        self._switched = False
 
     def _switch_to_english_fallback(self) -> None:
         """回退方案：模拟 Ctrl+Space 切换输入法"""
