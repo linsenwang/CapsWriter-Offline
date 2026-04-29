@@ -12,6 +12,32 @@ from util.common.lifecycle import lifecycle
 from . import logger
 
 
+def restart_recognizer_process():
+    """重启识别子进程（用于 watchdog 检测到卡死时）"""
+    state = get_state()
+    old_process = state.recognize_process
+    
+    if old_process and old_process.is_alive():
+        logger.warning(f"终止旧识别子进程 (PID {old_process.pid})")
+        old_process.terminate()
+        old_process.join(timeout=5)
+        if old_process.is_alive():
+            logger.warning("旧子进程未响应，强制 kill")
+            old_process.kill()
+            old_process.join(timeout=2)
+    
+    # 尽力清空旧队列，避免重启后处理堆积的脏数据
+    for q in (Cosmic.queue_in, Cosmic.queue_out):
+        while True:
+            try:
+                q.get_nowait()
+            except:
+                break
+    
+    logger.info("正在重新启动识别子进程...")
+    return start_recognizer_process()
+
+
 def start_recognizer_process():
     """启动识别子进程并等待模型加载完成"""
     

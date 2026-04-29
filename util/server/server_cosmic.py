@@ -39,3 +39,6 @@ class Cosmic:
     # 消息队列
     queue_in: Queue = Queue()
     queue_out: Queue = Queue()
+    
+    # 最后一次收到识别结果的时间戳（用于 watchdog 检测卡死）
+    last_result_time: float = 0.0

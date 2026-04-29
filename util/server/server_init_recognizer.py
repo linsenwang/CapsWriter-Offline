@@ -45,6 +45,14 @@ def signal_handler(signum, frame):
     exit(0)
 
 
+class RecognitionTimeout(Exception):
+    """识别任务超时异常"""
+    pass
+
+
+def _recognition_timeout_handler(signum, frame):
+    """单次识别超时的信号处理器（仅 Linux/macOS）"""
+    raise RecognitionTimeout("单次识别超过60秒")
 
 
 
@@ -168,7 +176,23 @@ def init_recognizer(queue_in: Queue, queue_out: Queue, sockets_id, stdin_fn):
             logger.debug(f"任务所属连接已断开，跳过处理，任务ID: {task.task_id}")
             continue
 
-        result = recognize(recognizer, punc_model, task)   # 执行识别
+        # Linux/macOS 下给单次识别设 60 秒超时保护
+        _old_handler = None
+        if system() != 'Windows':
+            _old_handler = signal.signal(signal.SIGALRM, _recognition_timeout_handler)
+            signal.alarm(60)
+
+        try:
+            result = recognize(recognizer, punc_model, task)   # 执行识别
+        except RecognitionTimeout:
+            logger.error(f"识别任务超时，跳过此片段，任务ID: {task.task_id}")
+            continue
+        finally:
+            if system() != 'Windows':
+                signal.alarm(0)
+                if _old_handler is not None:
+                    signal.signal(signal.SIGALRM, _old_handler)
+
         queue_out.put(result)      # 返回结果
 
     # 清理完成

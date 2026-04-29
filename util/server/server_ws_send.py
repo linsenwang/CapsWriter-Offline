@@ -1,6 +1,7 @@
 import json
 import base64
 import asyncio
+import time
 from multiprocessing import Queue
 
 from util.server.server_cosmic import console, Cosmic
@@ -17,11 +18,13 @@ async def ws_send():
     sockets = Cosmic.sockets
 
     logger.info("WebSocket 发送任务已启动")
+    Cosmic.last_result_time = time.time()
 
     while True:
         try:
             # 获取识别结果（从多进程队列）
             result: Result = await to_thread(queue_out.get)
+            Cosmic.last_result_time = time.time()
 
             # 得到退出的通知
             if result is None:

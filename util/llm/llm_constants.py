@@ -54,7 +54,7 @@ class APIConfig:
 
     # 默认 API URL
     DEFAULT_API_URLS = {
-        'ollama': 'http://localhost:11434',
+        'ollama': 'http://192.168.1.116:11434',
         'openai': 'https://api.openai.com/v1',
         'deepseek': 'https://api.deepseek.com/v1',
         'moonshot': 'https://api.moonshot.cn/v1',
