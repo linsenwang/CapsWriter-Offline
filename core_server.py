@@ -28,49 +28,6 @@ for handler in logger.handlers:
 
 
 
-async def watchdog():
-    """监控识别子进程健康，卡死则自动重启"""
-    import time
-    from util.server.state import get_state
-    from util.server.service import restart_recognizer_process
-    
-    # 等待模型首次加载完成
-    await asyncio.sleep(15)
-    
-    while True:
-        await asyncio.sleep(30)
-        
-        state = get_state()
-        process = state.recognize_process
-        if not process:
-            continue
-        
-        # 情况 A：子进程已崩溃
-        if not process.is_alive():
-            logger.error(f"识别子进程已退出 (exitcode={process.exitcode})，准备重启...")
-            try:
-                restart_recognizer_process()
-            except Exception as e:
-                logger.error(f"重启失败: {e}")
-            continue
-        
-        # 情况 B：子进程活着但卡死
-        # 只有当「有任务已提交但未完成」时才检查超时，空闲状态不算
-        pending = Cosmic.last_task_submit_time - Cosmic.last_result_time
-        if pending > 0:
-            idle = time.time() - Cosmic.last_result_time
-            # 文件转录或长音频可能单次就需要数分钟，阈值必须足够大
-            if idle > 600:
-                logger.warning(
-                    f"识别子进程疑似卡死（有未完成任务已闲置 {idle:.0f} 秒，"
-                    f"最后提交={Cosmic.last_task_submit_time:.0f}，最后结果={Cosmic.last_result_time:.0f}），强制重启..."
-                )
-                try:
-                    restart_recognizer_process()
-                except Exception as e:
-                    logger.error(f"重启失败: {e}")
-
-
 async def run_websocket_server():
     """运行 WebSocket 服务器"""
     loop = asyncio.get_running_loop()
@@ -98,7 +55,6 @@ async def run_websocket_server():
                                 max_size=None):
         
         send_task = asyncio.create_task(ws_send())
-        watchdog_task = asyncio.create_task(watchdog())
         
         # 3. 等待退出信号
         # 如果已经处于 shutting down 状态，ensure event is set
@@ -108,7 +64,7 @@ async def run_websocket_server():
         wait_shutdown_task = asyncio.create_task(lifecycle.wait_for_shutdown())
 
         done, pending = await asyncio.wait(
-            [send_task, watchdog_task, wait_shutdown_task],
+            [send_task, wait_shutdown_task],
             return_when=asyncio.FIRST_COMPLETED
         )
 

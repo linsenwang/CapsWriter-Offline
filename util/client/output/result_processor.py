@@ -181,7 +181,10 @@ class ResultProcessor:
                     except asyncio.CancelledError:
                         raise
                     except ConnectionClosedError:
-                        logger.warning("WebSocket 连接已关闭")
+                        logger.warning("WebSocket 连接已断开")
+                        break
+                    except ConnectionClosedOK:
+                        logger.info("WebSocket 连接已正常关闭 (1001)")
                         break
                     except Exception as e:
                         logger.error(f"处理消息时发生错误: {e}", exc_info=True)
@@ -258,6 +261,12 @@ class ResultProcessor:
 
         # 保存最近一次识别结果
         self.state.last_recognition_text = text
+
+        # 如果处理后文本为空或仅空白，直接丢弃，不再进行后续处理
+        if not text or not text.strip():
+            logger.info("识别结果为空，跳过后续处理和输出")
+            console.line()
+            return
 
         # 语音命令匹配检查
         matched_cmd = self._voice_cmd_manager.match(text)

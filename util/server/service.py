@@ -26,13 +26,10 @@ def restart_recognizer_process():
             old_process.kill()
             old_process.join(timeout=2)
     
-    # 尽力清空旧队列，避免重启后处理堆积的脏数据
-    for q in (Cosmic.queue_in, Cosmic.queue_out):
-        while True:
-            try:
-                q.get_nowait()
-            except:
-                break
+    # 创建新队列，避免旧队列因 feeder 线程退出而无法使用
+    from multiprocessing import Queue
+    Cosmic.queue_in = Queue()
+    Cosmic.queue_out = Queue()
     
     logger.info("正在重新启动识别子进程...")
     return start_recognizer_process()
@@ -45,6 +42,9 @@ def start_recognizer_process():
 
     state = get_state()
     Cosmic.sockets_id = Manager().list()
+    # 同步现有连接到新 sockets_id，避免重启后跳过已有连接的任务
+    for sid in list(Cosmic.sockets.keys()):
+        Cosmic.sockets_id.append(sid)
     stdin_fn = sys.stdin.fileno()
     recognize_process = Process(target=init_recognizer,
                                 args=(Cosmic.queue_in,

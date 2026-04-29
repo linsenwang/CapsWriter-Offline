@@ -14,22 +14,21 @@ from rich import inspect
 
 async def ws_send():
 
-    queue_out = Cosmic.queue_out
     sockets = Cosmic.sockets
 
     logger.info("WebSocket 发送任务已启动")
-    Cosmic.last_result_time = time.time()
 
     while True:
         try:
-            # 获取识别结果（从多进程队列）
+            # 每次都从 Cosmic 获取最新队列引用（子进程重启后会替换队列）
+            queue_out = Cosmic.queue_out
             result: Result = await to_thread(queue_out.get)
-            Cosmic.last_result_time = time.time()
 
-            # 得到退出的通知
+            # 子进程退出时队列可能收到 None（feeder 线程 EOF 哨兵），跳过继续等待
             if result is None:
-                logger.info("收到退出通知，停止发送任务")
-                return
+                logger.info("识别子进程已退出，继续等待新结果...")
+                await asyncio.sleep(1)
+                continue
 
             # 构建消息
             message = {

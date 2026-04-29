@@ -40,6 +40,4 @@ class Cosmic:
     queue_in: Queue = Queue()
     queue_out: Queue = Queue()
     
-    # 用于 watchdog 检测卡死的时间戳
-    last_result_time: float = 0.0      # 最后一次收到识别结果的时间
-    last_task_submit_time: float = 0.0 # 最后一次向 queue_in 提交任务的时间
+
