@@ -54,14 +54,21 @@ async def watchdog():
                 logger.error(f"重启失败: {e}")
             continue
         
-        # 情况 B：子进程活着但卡死（超过 90 秒没有新结果）
-        idle = time.time() - Cosmic.last_result_time
-        if idle > 90:
-            logger.warning(f"识别子进程疑似卡死（已闲置 {idle:.0f} 秒），强制重启...")
-            try:
-                restart_recognizer_process()
-            except Exception as e:
-                logger.error(f"重启失败: {e}")
+        # 情况 B：子进程活着但卡死
+        # 只有当「有任务已提交但未完成」时才检查超时，空闲状态不算
+        pending = Cosmic.last_task_submit_time - Cosmic.last_result_time
+        if pending > 0:
+            idle = time.time() - Cosmic.last_result_time
+            # 文件转录或长音频可能单次就需要数分钟，阈值必须足够大
+            if idle > 600:
+                logger.warning(
+                    f"识别子进程疑似卡死（有未完成任务已闲置 {idle:.0f} 秒，"
+                    f"最后提交={Cosmic.last_task_submit_time:.0f}，最后结果={Cosmic.last_result_time:.0f}），强制重启..."
+                )
+                try:
+                    restart_recognizer_process()
+                except Exception as e:
+                    logger.error(f"重启失败: {e}")
 
 
 async def run_websocket_server():

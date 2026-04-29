@@ -110,6 +110,7 @@ async def message_handler(websocket, message: dict, cache: AudioCache) -> None:
                 )
                 cache.offset += seg_duration
                 queue_in.put(task)
+                Cosmic.last_task_submit_time = time.time()
                 logger.debug(
                     f"提交音频片段，任务ID: {task_id}, "
                     f"偏移: {cache.offset}s, 缓冲区: {len(cache.chunks)} bytes"
@@ -137,6 +138,7 @@ async def message_handler(websocket, message: dict, cache: AudioCache) -> None:
                 context=context
             )
             queue_in.put(task)
+            Cosmic.last_task_submit_time = time.time()
             logger.debug(f"提交最终片段，任务ID: {task_id}, 数据大小: {len(cache.chunks)} bytes")
 
             # 重置缓冲区

@@ -176,16 +176,20 @@ def init_recognizer(queue_in: Queue, queue_out: Queue, sockets_id, stdin_fn):
             logger.debug(f"任务所属连接已断开，跳过处理，任务ID: {task.task_id}")
             continue
 
-        # Linux/macOS 下给单次识别设 60 秒超时保护
+        # Linux/macOS 下给单次识别设动态超时保护
+        # 基础 120 秒 + 音频时长 × 10 秒（防止长音频被误杀）
+        audio_duration = len(task.data) // (4 * task.samplerate) if task.samplerate > 0 else 0
+        timeout_seconds = max(120, int(audio_duration * 10))
+        
         _old_handler = None
         if system() != 'Windows':
             _old_handler = signal.signal(signal.SIGALRM, _recognition_timeout_handler)
-            signal.alarm(60)
+            signal.alarm(timeout_seconds)
 
         try:
             result = recognize(recognizer, punc_model, task)   # 执行识别
         except RecognitionTimeout:
-            logger.error(f"识别任务超时，跳过此片段，任务ID: {task.task_id}")
+            logger.error(f"识别任务超时（>{timeout_seconds}秒），跳过此片段，任务ID: {task.task_id}")
             continue
         finally:
             if system() != 'Windows':
