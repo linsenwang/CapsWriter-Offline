@@ -61,13 +61,30 @@ class MessageBuilder:
         Returns:
             完整的消息列表
         """
+        # 先提取热词，供后续 system prompt 使用
+        hotword_words = []
+        if role_config.enable_hotwords and hotwords:
+            try:
+                # hotwords 结构为 [(source, match, score), ...]
+                hotword_words = [item[1] for item in hotwords]
+                if hotword_words:
+                    logger.debug(f"[消息构建] 提取到热词: {hotword_words}")
+            except Exception as e:
+                logger.error(f"[ERROR] Failed to process hotwords: {e}")
+                logger.error(f"[ERROR] hotwords details: {[(type(hw), hw) for hw in hotwords[:5]]}")
+                raise
+
         messages = []
 
-        # 1. System Prompt
+        # 1. System Prompt（热词零散附在末尾，避免模型复读标题）
         if role_config.system_prompt:
+            system_content = role_config.system_prompt.strip()
+            if hotword_words:
+                # 零散给出，不用任何标题前缀，防止模型复读
+                system_content += f"\n\n语音中可能出现的术语：{', '.join(hotword_words)}。"
             messages.append({
                 "role": "system",
-                "content": role_config.system_prompt
+                "content": system_content
             })
 
         # 2. 对话历史
@@ -80,24 +97,7 @@ class MessageBuilder:
         # 3. 用户内容构建 (集中式构建，方便管理格式)
         context_parts = []
 
-        # 3.1 热词列表
-        if role_config.enable_hotwords and hotwords:
-            logger.debug(f"[DEBUG] hotwords type={type(hotwords)}, len={len(hotwords)}")
-            if hotwords:
-                logger.debug(f"[DEBUG] hotwords[0] type={type(hotwords[0])}, value={hotwords[0]}")
-            try:
-                # hotwords 结构为 [(source, match, score), ...]
-                words = [item[1] for item in hotwords]
-                        
-                if words:
-                    context_parts.append(f"{role_config.prompt_prefix_hotwords}[{', '.join(words)}]")
-                    logger.debug(f"[消息构建] 已添加热词列表")
-            except Exception as e:
-                logger.error(f"[ERROR] Failed to process hotwords: {e}")
-                logger.error(f"[ERROR] hotwords details: {[(type(hw), hw) for hw in hotwords[:5]]}")
-                raise
-
-        # 3.2 纠错历史 (从 RAG 获取原始数据并在本地格式化)
+        # 3.1 纠错历史 (从 RAG 获取原始数据并在本地格式化)
         if role_config.enable_rectify:
             rectify_rag = self._get_rectify_rag()
             if rectify_rag:
@@ -109,12 +109,12 @@ class MessageBuilder:
                     context_parts.append("\n".join(lines))
                     logger.debug(f"[消息构建] 已从 RAG 获取并添加 {len(matches)} 条纠错历史记录")
 
-        # 3.3 选中文字
+        # 3.2 选中文字
         if selection_text:
              context_parts.append(f"{role_config.prompt_prefix_selection}{selection_text}")
              logger.debug(f"[消息构建] 已添加选中文字")
 
-        # 3.4 最终组装
+        # 3.3 最终组装
         context_str = "\n\n".join(context_parts)
         context_str = context_str + "\n\n" if context_str else ""
 

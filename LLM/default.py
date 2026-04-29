@@ -51,7 +51,7 @@ extra_options = {}                      # 额外的 API 参数（JSON 格式）
 prompt_prefix_hotwords = '热词列表：'    # 热词列表前缀
 prompt_prefix_rectify = '纠错历史：'     # 纠错历史前缀
 prompt_prefix_selection = '选中文字：'   # 选中文字前缀
-prompt_prefix_input = '用户输入：'       # 用户输入前缀
+prompt_prefix_input = ''                # 用户输入前缀（留空避免模型复读）
 
 # ==================== System Prompt ====================
 system_prompt = '''
