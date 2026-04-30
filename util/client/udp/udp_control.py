@@ -112,10 +112,10 @@ class UDPController:
             return
 
         if command == 'START':
-            # 如果麦克风因空闲被释放，先重新打开音频流
+            # 如果麦克风因空闲被释放或设备发生变化，先重新打开音频流
             if state.stream is None and state.stream_manager:
                 logger.info("UDP 控制：麦克风已释放，正在重新打开...")
-                stream = state.stream_manager.open()
+                stream = state.stream_manager.reopen()
                 if stream is None:
                     logger.error("UDP 控制：重新打开麦克风失败")
                     return

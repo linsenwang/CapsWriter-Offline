@@ -126,7 +126,9 @@ def setup_client_components(base_dir):
     logger.info("正在打开音频流...")
     stream_manager = AudioStreamManager(state)
     state.stream_manager = stream_manager
-    stream_manager.open()
+    stream = stream_manager.open()
+    if stream is None:
+        logger.warning("初始音频流打开失败，客户端将在后台运行，使用时自动重试")
 
     # 6. 快捷键管理器（统一管理键盘和鼠标快捷键）
     # 从 Config.shortcuts 列表创建 Shortcut 对象
