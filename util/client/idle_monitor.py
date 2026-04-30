@@ -57,7 +57,7 @@ class IdleMonitor:
         self._running = True
         self._thread = threading.Thread(target=self._loop, daemon=True, name="IdleMonitor")
         self._thread.start()
-        logger.info(f"空闲监控已启动: {Config.idle_timeout}秒无操作将自动释放麦克风 (检查间隔: {self.check_interval}秒)")
+        # logger.info(f"空闲监控已启动: {Config.idle_timeout}秒无操作将自动释放麦克风 (检查间隔: {self.check_interval}秒)")
 
     def stop(self) -> None:
         """停止空闲监控"""
@@ -88,12 +88,10 @@ class IdleMonitor:
             elapsed = time.time() - self.state.last_activity_time
             remaining = Config.idle_timeout - elapsed
 
-            if remaining <= 60 and remaining > 0:
-                # 提前 1 分钟提醒
-                logger.info(f"即将释放麦克风: 还剩 {remaining:.0f} 秒")
+            # 倒计时提醒已省略，只在实际释放时记录日志
 
             if elapsed > Config.idle_timeout:
-                logger.info(f"空闲超时: {elapsed:.0f}秒未使用，释放麦克风...")
+                # logger.info(f"空闲超时: {elapsed:.0f}秒未使用，释放麦克风...")
 
                 # 关闭音频流释放麦克风
                 if self.state.stream_manager:

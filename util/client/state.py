@@ -75,6 +75,12 @@ class ClientState:
     
     # 最近一次输出内容（如果是 LLM 润色，则是润色结果；否则是原始识别结果）
     last_output_text: Optional[str] = None
+
+    # 当前使用的麦克风设备名称（用于按设备应用不同增益）
+    current_mic_name: Optional[str] = None
+
+    # 当前麦克风匹配的顺位（0 表示回退到了系统默认设备）
+    current_mic_rank: int = 0
     
     # 定期刷新状态文件的异步任务
     _status_refresh_task: Optional[asyncio.Task] = None

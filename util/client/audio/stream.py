@@ -104,44 +104,68 @@ class AudioStreamManager:
         except Exception:
             return None
     
-    def _resolve_device(self) -> tuple[Optional[int], str]:
+    def _resolve_device(self) -> tuple[Optional[int], str, int, str]:
         """
         根据配置解析要使用的设备索引和名称
         
-        如果配置了 mic_device_name，优先查找匹配的设备（不区分大小写，部分匹配）。
-        找不到时自动回落到系统默认设备。
+        优先使用 mic_devices（顺位+增益一体化配置），按列表顺序依次查找
+        匹配的设备（不区分大小写，部分匹配）。mic_devices 为空时回退到
+        旧版 mic_device_names / mic_device_name。找不到时自动回落到系统默认设备。
         
         Returns:
-            (设备索引, 设备名称)。索引为 None 表示使用系统默认。
+            (设备索引, 设备名称, 匹配顺位, 匹配到的候选名)。
+            索引为 None 表示使用系统默认；匹配顺位为 0 表示使用了默认设备。
         """
         from config_client import ClientConfig as Config
         
-        if Config.mic_device_name:
+        # 优先使用新版一体化配置 mic_devices
+        candidate_names = []
+        mic_devices = getattr(Config, 'mic_devices', None)
+        if mic_devices and isinstance(mic_devices, (list, tuple)):
+            for entry in mic_devices:
+                if isinstance(entry, dict) and entry.get('name'):
+                    candidate_names.append(entry['name'])
+                elif isinstance(entry, str):
+                    candidate_names.append(entry)
+        
+        # 回退到旧版 mic_device_names / mic_device_name
+        if not candidate_names:
+            if hasattr(Config, 'mic_device_names') and Config.mic_device_names:
+                if isinstance(Config.mic_device_names, str):
+                    candidate_names = [Config.mic_device_names]
+                elif isinstance(Config.mic_device_names, (list, tuple)):
+                    candidate_names = list(Config.mic_device_names)
+            elif hasattr(Config, 'mic_device_name') and Config.mic_device_name:
+                candidate_names = [Config.mic_device_name]
+        
+        if candidate_names:
             try:
                 devices = sd.query_devices()
-                for i, d in enumerate(devices):
-                    if d.get('max_input_channels', 0) > 0:
-                        name = d.get('name', '')
-                        if Config.mic_device_name.lower() in name.lower():
-                            return i, name
+                for rank, candidate in enumerate(candidate_names, start=1):
+                    candidate_lower = candidate.lower()
+                    for i, d in enumerate(devices):
+                        if d.get('max_input_channels', 0) > 0:
+                            name = d.get('name', '')
+                            if candidate_lower in name.lower():
+                                return i, name, rank, candidate
             except Exception as e:
                 logger.warning(f"查找指定麦克风时出错: {e}")
-            logger.warning(f"未找到配置的麦克风 '{Config.mic_device_name}'，将使用系统默认设备")
+            logger.warning(f"未找到配置的麦克风 {candidate_names}，将使用系统默认设备")
         
         try:
             device = sd.query_devices(kind='input')
             default_idx = self.get_default_device_index()
-            return default_idx, device.get('name', '默认设备')
+            return default_idx, device.get('name', '默认设备'), 0, ''
         except UnicodeDecodeError:
-            return None, '未知设备（编码问题）'
+            return None, '未知设备（编码问题）', 0, ''
         except sd.PortAudioError:
-            return None, ''
+            return None, '', 0, ''
     
     def is_device_changed(self) -> bool:
         """检测当前应使用的音频输入设备是否已发生变化"""
         if self._current_device_index is None:
             return True
-        new_index, _ = self._resolve_device()
+        new_index, _, _, _ = self._resolve_device()
         return new_index != self._current_device_index
     
     def open(self) -> Optional[sd.InputStream]:
@@ -151,8 +175,8 @@ class AudioStreamManager:
         Returns:
             创建的音频输入流，如果失败返回 None
         """
-        # 解析目标设备（优先使用配置的 mic_device_name，找不到则回落到默认）
-        device_index, device_name = self._resolve_device()
+        # 解析目标设备（优先使用配置的 mic_device_names，按顺位查找，找不到则回落到默认）
+        device_index, device_name, matched_rank, matched_candidate = self._resolve_device()
         
         if device_name == '':
             console.print("没有找到麦克风设备", end='\n\n', style='bright_red')
@@ -171,11 +195,16 @@ class AudioStreamManager:
         except Exception:
             self._channels = 1
         
+        if matched_rank > 0:
+            log_msg = f"按第 {matched_rank} 顺位找到音频设备: {device_name} (匹配: {matched_candidate}), 声道数: {self._channels}"
+        else:
+            log_msg = f"使用系统默认音频设备: {device_name}, 声道数: {self._channels}"
+        
         console.print(
             f'使用音频设备：[italic]{device_name}，声道数：{self._channels}',
             end='\n\n'
         )
-        logger.info(f"找到音频设备: {device_name}, 声道数: {self._channels}")
+        logger.info(log_msg)
         
         # 创建音频流
         try:
@@ -193,6 +222,8 @@ class AudioStreamManager:
             self.state.stream = stream
             self._running = True
             self._current_device_index = device_index
+            self.state.current_mic_name = device_name
+            self.state.current_mic_rank = matched_rank
             logger.debug(
                 f"音频流已启动: 采样率={self.SAMPLE_RATE}, "
                 f"块大小={int(self.BLOCK_DURATION * self.SAMPLE_RATE)}, "

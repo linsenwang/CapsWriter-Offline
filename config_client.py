@@ -53,9 +53,17 @@ class ClientConfig:
     # 日志配置
     log_level = 'INFO'          # 日志级别：'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'
 
-    audio_gain = 20.0            # 固定增益系数（1.0=原样，>1.0=放大，<1.0=衰减）
+    audio_gain = 20.0            # 全局默认固定增益系数（1.0=原样，>1.0=放大，<1.0=衰减）
     audio_normalize = False      # 是否启用峰值归一化（自动将每段音频的最大振幅调整到接近满幅但不过曝）。启用时会忽略 audio_gain 的固定值
     audio_normalize_target = 0.95  # 峰值归一化的目标振幅（建议 0.9~0.99，留一点 headroom 防止削波）
+
+    # 按麦克风设备名称（部分匹配）单独设置增益，优先级高于 audio_gain。
+    # 键为设备名称片段（不区分大小写），值为增益系数。
+    # 找不到匹配时使用 audio_gain 作为回退。
+    mic_device_gains = {
+        # 'DJI Mic Mini': 25.0,
+        # 'Wireless Mic Rx': 15.0,
+    }
 
     mic_seg_duration = 60       # 麦克风听写时分段长度：60秒
     mic_seg_overlap = 4         # 麦克风听写时分段重叠：4秒
@@ -91,7 +99,26 @@ class ClientConfig:
     ws_retry_delay = 2.0            # 每次重试之间的等待时间（秒），给 autossh 等隧道恢复留出时间
     ws_max_retries = 5              # 连接失败时的最大重试次数
 
-    mic_device_name = 'Wireless Mic Rx'  # 优先使用的麦克风名称（部分匹配），找不到时自动回落到系统默认麦克风。设为 None 则始终使用系统默认
+    # 麦克风设备配置（顺位 + 增益一体化）
+    # 列表顺序即为查找优先级；每个条目包含设备名称片段和专属增益。
+    # 找不到匹配时自动回落到系统默认麦克风，并使用全局 audio_gain。
+    mic_devices = [
+        {'name': 'Wireless Mic Rx', 'gain': 21.0},
+        {'name': 'DJI Mic Mini 2-6D85A5', 'gain': 21.0},
+    ]
+
+    default_device_gain = 15   # 回退到系统默认麦克风时的专属增益（None 则使用全局 audio_gain）
+
+    # 兼容旧版分开配置（仅在 mic_devices 为空时生效）
+    # mic_device_names = ['Wireless Mic Rx', 'DJI Mic Mini 2-6D85A5' ]  # 优先使用的麦克风名称列表（部分匹配），按顺序查找
+    # 兼容旧版单字符串配置：mic_device_name = 'Wireless Mic Rx'
+
+
+    # 兼容旧版增益字典（仅在 mic_devices 为空时生效）
+    mic_device_gains = {
+        # 'DJI Mic Mini': 25.0,
+        # 'Wireless Mic Rx': 15.0,
+    }
 
     # 语音命令配置
     # 当识别结果匹配到对应正则时，执行指定动作，而不是输出文本

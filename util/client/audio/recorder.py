@@ -55,14 +55,61 @@ class AudioRecorder:
         # 限制并发发送任务数量，防止 WebSocket 阻塞时 task 无限累积
         self._send_semaphore = asyncio.Semaphore(8)
     
-    @staticmethod
-    def _process_audio(audio_data: np.ndarray) -> np.ndarray:
+    def _resolve_gain(self) -> float:
+        """
+        根据当前麦克风设备名称解析应使用的增益值。
+
+        如果回退到了系统默认设备（rank == 0），优先使用 default_device_gain；
+        否则优先从 mic_devices（一体化配置）中查找匹配的增益；
+        未匹配时回退到旧版 mic_device_gains 字典；
+        仍无匹配时回退到全局 audio_gain。
+        """
+        mic_name = self.state.current_mic_name
+        if not mic_name:
+            return Config.audio_gain
+
+        # 回退到系统默认设备时的专属增益
+        if self.state.current_mic_rank == 0:
+            default_gain = getattr(Config, 'default_device_gain', None)
+            if default_gain is not None:
+                logger.debug(f"系统默认麦克风 '{mic_name}' 使用 default_device_gain = {default_gain}")
+                return float(default_gain)
+            return Config.audio_gain
+
+        mic_lower = mic_name.lower()
+
+        # 优先使用新版一体化配置 mic_devices
+        mic_devices = getattr(Config, 'mic_devices', None)
+        if mic_devices and isinstance(mic_devices, (list, tuple)):
+            for entry in mic_devices:
+                if isinstance(entry, dict):
+                    name_fragment = entry.get('name', '')
+                    gain = entry.get('gain')
+                    if isinstance(name_fragment, str) and name_fragment.lower() in mic_lower and gain is not None:
+                        logger.debug(f"麦克风 '{mic_name}' 匹配 mic_devices 配置 '{name_fragment}' = {gain}")
+                        return float(gain)
+                elif isinstance(entry, str) and entry.lower() in mic_lower:
+                    # 字符串条目没有专属增益，继续向下查找其他匹配
+                    pass
+
+        # 回退到旧版 mic_device_gains 字典
+        device_gains = getattr(Config, 'mic_device_gains', None)
+        if device_gains and isinstance(device_gains, dict):
+            for name_fragment, gain in device_gains.items():
+                if isinstance(name_fragment, str) and name_fragment.lower() in mic_lower:
+                    logger.debug(f"麦克风 '{mic_name}' 匹配 mic_device_gains 配置 '{name_fragment}' = {gain}")
+                    return float(gain)
+
+        return Config.audio_gain
+
+    def _process_audio(self, audio_data: np.ndarray) -> np.ndarray:
         """对音频数据应用增益或峰值归一化（含软限幅防止削波失真）"""
+        gain = self._resolve_gain()
         return apply_audio_gain(
             audio_data,
             normalize=Config.audio_normalize,
             normalize_target=Config.audio_normalize_target,
-            gain=Config.audio_gain,
+            gain=gain,
         )
     
     async def _send_with_semaphore(self, message: dict) -> None:
