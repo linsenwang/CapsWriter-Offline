@@ -72,9 +72,10 @@ class AudioFileManager:
         local_time = time.localtime(time_start)
         time_year = time.strftime('%Y', local_time)
         time_month = time.strftime('%m', local_time)
+        time_day = time.strftime('%d', local_time)
         time_ymdhms = time.strftime("%Y%m%d-%H%M%S", local_time)
         
-        folder_path = Path() / time_year / time_month / 'assets'
+        folder_path = Path() / time_year / time_month / time_day
         makedirs(folder_path, exist_ok=True)
         
         # 创建临时文件名

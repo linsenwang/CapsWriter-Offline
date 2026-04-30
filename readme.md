@@ -132,7 +132,7 @@ A: 是的，macOS 目前不支持单事件抑制，因此 CapsLock 等切换键�
 A: 请确认 `start_client.exe` 的黑窗口还在运行。若想在管理员权限运行的程序中输入，也需以管理员权限运行客户端。
 
 **Q: 为什么识别结果没字？**  
-A: 到 `年/月/assets` 文件夹中检查录音文件，看是不是没有录到音；听听录音效果，是不是麦克风太差，建议使用桌面 USB 麦克风；检查麦克风权限。
+A: 到 `年/月/日` 文件夹中检查录音文件，看是不是没有录到音；听听录音效果，是不是麦克风太差，建议使用桌面 USB 麦克风；检查麦克风权限。
 
 **Q: 我可以用显卡加速吗？**  
 A: 目前 Fun-ASR-Nano 模型支持显卡加速，Encoder 使用 DirectML 加速（默认关闭），Decoder 使用 Vulkan 加速。但是对于高U低显的集显用户，显卡加速的效果可能还不如CPU，可以到 `config_server.py` 中把 `dml_enable` 或 `vulkan_enable` 设为 False 以禁用显卡加速。Paraformer 和 SenseVoice 本身在 CPU 上就已经超快，用 DirectML 加速反而每次识别会有 200ms 启动开销，因此对它们没有支持显卡加速。
