@@ -11,7 +11,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 客户端配置
 class ClientConfig:
-    addr = '192.168.1.116'      # Server 地址
+    addr = '127.0.0.1'      # Server 地址
     port = '6016'               # Server 端口
 
     # 快捷键配置列表

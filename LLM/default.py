@@ -10,9 +10,9 @@ process = True
 
 # ==================== API 配置 ====================
 provider = 'ollama'                     # API 提供商：'ollama', 'openai', 'deepseek', 'moonshot', 'zhipu', 'claude', 'gemini'
-api_url = 'http://192.168.1.116:11434'                            # 留空则自动使用 provider 对应的默认值
+api_url = 'http://127.0.0.1:11434'                            # 留空则自动使用 provider 对应的默认值
 api_key = ''                            # API Key
-model = 'qwen3.5:9b'                  # 模型名称
+model = 'gemma4:e4b'                  # 模型名称
 
 # ==================== 上下文管理 ====================
 max_context_length = 4096               # 最大上下文长度（token 数）

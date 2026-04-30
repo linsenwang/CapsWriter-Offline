@@ -390,7 +390,7 @@ pm2 start ecosystem.config.js
 
 | 时间 | 修改内容 |
 |------|---------|
-| 2026-04-28 | 新增 Ollama 模型生命周期管理（服务启停自动加载/卸载）；默认模型切换为 qwen3.5:9b；新增 AGENTS.md |
+| 2026-04-28 | 新增 Ollama 模型生命周期管理（服务启停自动加载/卸载）；默认模型切换为 gemma4:e4b；新增 AGENTS.md |
 | 2026-04-23 | 引入 Hammerspoon UDP 控制方案；重构 `configure_shortcuts.py`；粘贴模式修复输入法问题；SwiftBar 状态支持 |
 | 2026-04-23 | 新增 Qwen3-ASR-HF 后端（`util/qwen_asr_hf/`），支持 transformers / vLLM |
 | 2026-04 | Qwen3-ASR GGUF 初步引入；Fun-ASR-Nano 改进 Encoder DirectML 加速 |

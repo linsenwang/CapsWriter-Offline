@@ -29,7 +29,7 @@ class OllamaLifecycleManager:
         初始化并加载模型
 
         Args:
-            model: 模型名称，如 'qwen3.5:9b'
+            model: 模型名称，如 'gemma4:e4b'
             host: Ollama 服务地址，默认使用 localhost:11434
         """
         host = host or DEFAULT_OLLAMA_HOST
