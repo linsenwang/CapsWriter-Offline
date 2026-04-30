@@ -261,6 +261,31 @@ class ClientState:
                 except Exception as e:
                     logger.warning(f"UDP 发送输出文本到 {addr}:{port} 失败: {e}")
 
+    def send_status(self, status_type: str, message: str) -> None:
+        """
+        发送处理状态到外部工具（如 Hammerspoon）
+        
+        通过 UDP 发送简短的状态通知，供外部工具显示弹窗或更新状态栏。
+        消息格式：STATUS:<类型>|<内容>
+        
+        Args:
+            status_type: 状态类型，如 'PROCESSING'、'DONE'
+            message: 状态显示文本
+        """
+        from config_client import ClientConfig as Config
+        
+        target = getattr(Config, 'udp_status_target', None)
+        if not target:
+            return
+        
+        try:
+            msg = f"STATUS:{status_type}|{message}".encode('utf-8')
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                sock.sendto(msg, target)
+            logger.debug(f"发送状态: {status_type}|{message} -> {target}")
+        except Exception as e:
+            logger.debug(f"发送状态失败: {e}")
+
 
 # 全局状态实例
 _global_state: Optional[ClientState] = None

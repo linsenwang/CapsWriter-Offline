@@ -191,6 +191,13 @@ class LLMHandler:
 
 
         # 4. 根据输出模式分发处理
+        # 发送角色处理状态到外部工具（如 Hammerspoon）
+        from util.client.state import get_state
+        role_display = role_config.name or '润色'
+        if role_display == '默认':
+            role_display = '润色'
+        get_state().send_status('PROCESSING', f'✨ {role_display}中...')
+
         if role_config.output_mode == 'toast':
             result, token_count, gen_time = await handle_toast_mode(text, role_config, matched_hotwords, content)
         else: # typing

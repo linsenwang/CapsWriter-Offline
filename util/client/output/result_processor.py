@@ -239,6 +239,9 @@ class ResultProcessor:
         if not message['is_final']:
             return
 
+        # 发送处理状态（录音结束后的识别/处理阶段）
+        self.state.send_status('PROCESSING', '📝 处理中...')
+
         # 繁体转换
         if Config.traditional_convert:
             try:
@@ -279,6 +282,7 @@ class ResultProcessor:
                 console.print('    [red]命令执行失败[/red]')
             console.line()
             # 语音命令执行后，跳过文本输出、录音保存、日记等后续流程
+            self.state.send_status('DONE', '✅ 完成')
             return
 
         # 控制台输出
@@ -368,6 +372,9 @@ class ResultProcessor:
                 file_audio
             )
             logger.debug("写入 LLM MD 文件")
+
+        # 发送完成状态
+        self.state.send_status('DONE', '✅ 完成')
 
         # 检测修饰键状态（调试用）
         self._log_modifier_key_state()
