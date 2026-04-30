@@ -8,6 +8,7 @@ WebSocket 连接管理模块
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING, Optional
 
@@ -34,16 +35,16 @@ class WebSocketManager:
         max_retries: 最大重试次数
     """
     
-    def __init__(self, state: 'ClientState', max_retries: int = 3):
+    def __init__(self, state: 'ClientState', max_retries: int = None):
         """
         初始化 WebSocket 管理器
         
         Args:
             state: 客户端状态实例
-            max_retries: 连接失败时的最大重试次数
+            max_retries: 连接失败时的最大重试次数，默认使用 Config.ws_max_retries
         """
         self.state = state
-        self.max_retries = max_retries
+        self.max_retries = max_retries if max_retries is not None else getattr(Config, 'ws_max_retries', 5)
     
     @property
     def is_connected(self) -> bool:
@@ -55,6 +56,7 @@ class WebSocketManager:
         建立 WebSocket 连接
         
         尝试连接到配置的服务端地址，如果失败会自动重试。
+        每次重试之间有延迟，给 SSH 隧道等不稳定网络恢复留出时间。
         
         Returns:
             连接是否成功
@@ -69,6 +71,12 @@ class WebSocketManager:
         
         url = f"ws://{Config.addr}:{Config.port}"
         
+        # 从配置读取超时参数
+        open_timeout = getattr(Config, 'ws_connect_timeout', 10)
+        ping_interval = getattr(Config, 'ws_ping_interval', 20)
+        ping_timeout = getattr(Config, 'ws_ping_timeout', 10)
+        retry_delay = getattr(Config, 'ws_retry_delay', 2.0)
+        
         for attempt in range(1, self.max_retries + 1):
             try:
                 logger.debug(f"正在连接服务端 {url} (尝试 {attempt}/{self.max_retries})")
@@ -76,7 +84,11 @@ class WebSocketManager:
                 self.state.websocket = await websockets.connect(
                     url,
                     subprotocols=["binary"],
-                    max_size=None
+                    max_size=None,
+                    open_timeout=open_timeout,
+                    ping_interval=ping_interval if ping_interval > 0 else None,
+                    ping_timeout=ping_timeout if ping_timeout > 0 else None,
+                    close_timeout=5,
                 )
                 
                 logger.info(f"WebSocket 连接成功: {url}")
@@ -88,6 +100,11 @@ class WebSocketManager:
                 logger.warning(f"连接超时 (尝试 {attempt}/{self.max_retries})")
             except Exception as e:
                 logger.error(f"连接失败: {e} (尝试 {attempt}/{self.max_retries})")
+            
+            # 最后一次不重试，直接返回失败
+            if attempt < self.max_retries:
+                logger.info(f"{retry_delay:.1f}秒后重试...")
+                await asyncio.sleep(retry_delay)
         
         logger.error(f"无法连接到服务端 {url}，已重试 {self.max_retries} 次")
         return False

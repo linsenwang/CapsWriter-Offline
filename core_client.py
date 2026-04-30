@@ -92,7 +92,7 @@ async def main_mic() -> None:
 
     # 接收结果
     _retry_count = 0
-    _retry_delay = 1.0
+    _retry_delay = 2.0  # 初始重试延迟，给 SSH 隧道等不稳定网络恢复留出时间
     _max_retry_delay = 30.0
 
     try:

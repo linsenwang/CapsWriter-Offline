@@ -82,6 +82,13 @@ class ClientConfig:
     idle_timeout = 10               # 空闲超时时间（秒），超过此时间无操作则释放麦克风
     idle_check_interval = 1         # 空闲检查间隔（秒），建议设为 1~5 秒
 
+    # WebSocket 连接配置（对 SSH 隧道等不稳定网络尤为重要）
+    ws_connect_timeout = 10         # WebSocket 连接超时（秒）
+    ws_ping_interval = 20           # WebSocket 心跳发送间隔（秒），0 表示禁用
+    ws_ping_timeout = 10            # WebSocket 心跳响应超时（秒）
+    ws_retry_delay = 2.0            # 每次重试之间的等待时间（秒），给 autossh 等隧道恢复留出时间
+    ws_max_retries = 5              # 连接失败时的最大重试次数
+
     mic_device_name = 'Wireless Mic Rx'  # 优先使用的麦克风名称（部分匹配），找不到时自动回落到系统默认麦克风。设为 None 则始终使用系统默认
 
     # 语音命令配置
