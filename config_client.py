@@ -103,11 +103,11 @@ class ClientConfig:
     # 列表顺序即为查找优先级；每个条目包含设备名称片段和专属增益。
     # 找不到匹配时自动回落到系统默认麦克风，并使用全局 audio_gain。
     mic_devices = [
-        {'name': 'Wireless Mic Rx', 'gain': 21.0},
-        {'name': 'DJI Mic Mini 2-6D85A5', 'gain': 21.0},
+        {'name': 'Wireless Mic Rx', 'gain': 20.0},
+        # {'name': 'DJI Mic Mini 2-6D85A5', 'gain': 21.0},
     ]
 
-    default_device_gain = 15   # 回退到系统默认麦克风时的专属增益（None 则使用全局 audio_gain）
+    default_device_gain = 2   # 回退到系统默认麦克风时的专属增益（None 则使用全局 audio_gain）
 
     # 兼容旧版分开配置（仅在 mic_devices 为空时生效）
     # mic_device_names = ['Wireless Mic Rx', 'DJI Mic Mini 2-6D85A5' ]  # 优先使用的麦克风名称列表（部分匹配），按顺序查找
