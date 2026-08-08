@@ -25,7 +25,7 @@ class ClientConfig:
 
     paste        = False        # 是否以写入剪切板然后模拟 Ctrl-V 粘贴的方式输出结果
     restore_clip = False        # 模拟粘贴后是否恢复剪贴板
-    switch_input_method = True   # 打字输出前是否自动切换到英文输入法（macOS Ctrl+Space），输入完成后恢复
+    switch_input_method = True   # 打字输出前是否自动切换到英文输入法（macOS 使用 util/tools/switch_input 精确切换，失败回退粘贴），输入完成后恢复
 
     save_transcript = True      # 是否保存转录文本和时间到本地日记文件 (YYYY/MM/DD.md)
     save_audio = True          # 是否保存录音文件

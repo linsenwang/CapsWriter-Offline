@@ -7,14 +7,24 @@ LLM Typing 输出模式
 """
 import asyncio
 import platform
+import re
 from pynput import keyboard as pynput_keyboard
 
 from config_client import ClientConfig as Config
 from util.tools.asyncio_to_thread import to_thread
-from util.client.output.text_output import TextOutput
+from util.client.output.text_output import TextOutput, SWITCH_SETTLE_DELAY
 from util.client.clipboard import paste_text
 from util.llm.llm_stop_monitor import reset, should_stop
 from . import logger
+
+
+# 复用 TextOutput 的输入法切换逻辑（打字前切到英文 ABC，完成后恢复）
+_text_output = TextOutput()
+
+
+def _has_english(text: str) -> bool:
+    """判断文本中是否包含英文单词（连续 ASCII 字母）"""
+    return bool(re.search(r'[A-Za-z]{2,}', text or ''))
 
 
 def _type_text(content: str) -> None:
@@ -81,6 +91,27 @@ async def _process_paste(handler, role_config, content, matched_hotwords) -> tup
 
 async def _process_streaming(handler, role_config, content, matched_hotwords) -> tuple:
     """处理流式打字模式：边生成边模拟按键打字"""
+    # 打字模式：先切换到英文输入法，避免中文输入法干扰英文输出
+    switched = False
+    if Config.switch_input_method:
+        switched = _text_output.switch_to_english()
+        if switched:
+            # 等待输入法切换真正生效，避免开头字符被中文输入法拦截
+            await asyncio.sleep(SWITCH_SETTLE_DELAY)
+        elif _has_english(content):
+            # 切换失败且内容含英文：回退到粘贴模式，避免英文被中文输入法吞掉
+            logger.warning("英文输入法切换失败且内容含英文，回退到粘贴模式")
+            return await _process_paste(handler, role_config, content, matched_hotwords)
+
+    try:
+        return await _streaming_inner(handler, role_config, content, matched_hotwords)
+    finally:
+        if switched:
+            _text_output.restore_input()
+
+
+async def _streaming_inner(handler, role_config, content, matched_hotwords) -> tuple:
+    """流式打字输出主体逻辑（已在 _process_streaming 中完成输入法切换与恢复）"""
     chunks = []
     pending_buffer = ""
 
@@ -142,6 +173,23 @@ async def output_text(text: str, paste: bool = None):
     """输出文本（根据 paste 或 Config.paste 选择方式）"""
     if paste:
         await paste_text(text, restore_clipboard=Config.restore_clip)
-    else:
+        return
+
+    # 打字模式：先切换到英文输入法，避免中文输入法干扰英文输出
+    switched = False
+    if Config.switch_input_method:
+        switched = _text_output.switch_to_english()
+        if switched:
+            # 等待输入法切换真正生效，避免开头字符被中文输入法拦截
+            await asyncio.sleep(SWITCH_SETTLE_DELAY)
+        elif _has_english(text):
+            # 切换失败且文本含英文：回退到粘贴模式，避免英文被中文输入法吞掉
+            logger.warning("英文输入法切换失败且文本含英文，回退到粘贴模式")
+            await paste_text(text, restore_clipboard=Config.restore_clip)
+            return
+    try:
         logger.debug(f"output_text: type '{text}'")
         _type_text(text)
+    finally:
+        if switched:
+            _text_output.restore_input()
