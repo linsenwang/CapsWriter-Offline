@@ -64,6 +64,7 @@ class ResultProcessor:
         self._voice_cmd_manager = VoiceCommandManager(Config.voice_commands)
         self._exit_event = asyncio.Event()
         self._loop = asyncio.get_running_loop()  # 保存事件循环引用
+        self._status_pending = False  # 已发出 PROCESSING、但还没发出终态状态
         
         # 预创建 DiaryWriter，避免每次消息都创建新实例
         if Config.save_transcript:
@@ -112,6 +113,35 @@ class ResultProcessor:
 
         return f'    模型结果{role_label}：{result_text}{speed_label}'
     
+    def _build_empty_hint(self) -> str:
+        """
+        生成"识别结果为空"时的提示文案
+        
+        麦克风原始峰值恒为 0，说明根本没有采到声音（设备选错、蓝牙耳机掉线、
+        盒盖状态下内置麦克风被系统禁用、或守护进程没有麦克风权限），
+        这与"说了话但没听清"是两种情况，需要分开提示。
+        """
+        import math
+        
+        peak = float(getattr(self.state, 'last_audio_peak', 0.0) or 0.0)
+        mic_name = self.state.current_mic_name or '未知设备'
+        if peak <= 0.0:
+            return f'⚠️ 未识别：麦克风 {mic_name} 完全没有采到声音，请检查设备'
+        db = 20 * math.log10(peak)
+        return f'⚠️ 未识别到语音（麦克风 {mic_name}，峰值 {db:.0f} dBFS）'
+
+    def _flush_pending_status(self) -> None:
+        """
+        兜底发送终态状态
+        
+        如果已经发出 PROCESSING 状态、却没走到任何终态（识别为空、处理异常等），
+        外部工具（Hammerspoon / SwiftBar 等）会一直停在"处理中"。
+        """
+        if not self._status_pending:
+            return
+        self._status_pending = False
+        self.state.send_status('DONE', '✅ 完成')
+
     def _log_modifier_key_state(self) -> None:
         """
         检测并记录当前按下的所有键
@@ -189,6 +219,9 @@ class ResultProcessor:
                     except Exception as e:
                         logger.error(f"处理消息时发生错误: {e}", exc_info=True)
                         raise
+                    finally:
+                        # 兜底：异常或提前返回时，也要给外部工具一个终态状态
+                        self._flush_pending_status()
 
         except ConnectionClosedError:
             console.print('[red]连接断开\n')
@@ -241,6 +274,7 @@ class ResultProcessor:
 
         # 发送处理状态（录音结束后的识别/处理阶段）
         self.state.send_status('PROCESSING', '📝 处理中...')
+        self._status_pending = True
 
         # 繁体转换
         if Config.traditional_convert:
@@ -265,9 +299,13 @@ class ResultProcessor:
         # 保存最近一次识别结果
         self.state.last_recognition_text = text
 
-        # 如果处理后文本为空或仅空白，直接丢弃，不再进行后续处理
+        # 如果处理后文本为空或仅空白，直接丢弃，但必须给用户一个明确提示，而不是静默消失
         if not text or not text.strip():
-            logger.info("识别结果为空，跳过后续处理和输出")
+            hint = self._build_empty_hint()
+            logger.warning(f"识别结果为空，跳过后续处理和输出（{hint}）")
+            console.print(f'    {hint}', style='yellow')
+            self.state.send_status('DONE', hint)
+            self._status_pending = False
             console.line()
             return
 
@@ -283,6 +321,7 @@ class ResultProcessor:
             console.line()
             # 语音命令执行后，跳过文本输出、录音保存、日记等后续流程
             self.state.send_status('DONE', '✅ 完成')
+            self._status_pending = False
             return
 
         # 控制台输出
@@ -375,6 +414,7 @@ class ResultProcessor:
 
         # 发送完成状态
         self.state.send_status('DONE', '✅ 完成')
+        self._status_pending = False
 
         # 检测修饰键状态（调试用）
         self._log_modifier_key_state()

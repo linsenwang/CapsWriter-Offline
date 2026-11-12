@@ -11,7 +11,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 客户端配置
 class ClientConfig:
-    addr = '127.0.0.1'      # Server 地址
+    addr = '100.97.117.78'      # Server 地址
     port = '6016'               # Server 端口
 
     # 快捷键配置列表
@@ -45,8 +45,8 @@ class ClientConfig:
     hot_rectify = 0.6           # 纠错历史 RAG 匹配阈值（低阈值，用于 LLM 上下文）
     hot_rule = True             # 是否启用自定义规则替换（基于正则表达式）
 
-    llm_enabled = True          # 是否启用 LLM 润色功能，需要配置 LLM/ 目录下的角色文件
-    llm_stop_key = 'esc'        # 中断 LLM 输出的快捷键
+    llm_enabled = False         # 是否启用 LLM 润色功能，需要配置 LLM/ 目录下的角色文件
+    llm_stop_key = 'esc'        # 中断 LLM 输出的快捷键（llm_enabled=False 时不注册）
 
     enable_tray = True          # 客户端默认启用托盘图标功能
 
@@ -105,6 +105,8 @@ class ClientConfig:
     mic_devices = [
         {'name': 'Wireless Mic Rx', 'gain': 20.0},
         # {'name': 'DJI Mic Mini 2-6D85A5', 'gain': 21.0},
+        # AirPods 自身的麦克风电平就很高（戴在耳朵上时接近满幅），增益必须调小，否则削波
+        {'name': 'AirPods Pro 2', 'gain': 4.0},
     ]
 
     default_device_gain = 2   # 回退到系统默认麦克风时的专属增益（None 则使用全局 audio_gain）
@@ -126,7 +128,7 @@ class ClientConfig:
     # target 可以是网址 (https://...) 或本地路径
     voice_commands = [
         # 示例：打开网页
-        {'pattern': r'打开\s*It\s*之家', 'action': 'open', 'target': 'https://www.ithome.com'},
+        # {'pattern': r'打开\s*It\s*之家', 'action': 'open', 'target': 'https://www.ithome.com'},
         # {'pattern': r'打开\s*GitHub',   'action': 'open', 'target': 'https://github.com'},
         # 示例：打开应用（macOS）
         # {'pattern': r'打开\s*微信',     'action': 'open', 'target': '/Applications/WeChat.app'},

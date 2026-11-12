@@ -6,6 +6,7 @@
 """
 
 import queue
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -90,16 +91,23 @@ class _HotwordDialogManager:
         self.root: Optional[tk.Tk] = None
         self.is_running = False
 
-        # 在独立线程中启动 Tkinter
-        self.tk_thread = threading.Thread(
-            target=self._run_tkinter,
-            daemon=True,
-            name="HotwordDialogThread"
-        )
-        self.tk_thread.start()
+        # macOS 上 Tk 只能在主线程创建，子线程创建会崩溃或冻死整个客户端
+        self.available = sys.platform != 'darwin'
+        self.tk_thread: Optional[threading.Thread] = None
 
-        # 等待 Tkinter 初始化完成
-        self._wait_for_ready()
+        if self.available:
+            # 在独立线程中启动 Tkinter
+            self.tk_thread = threading.Thread(
+                target=self._run_tkinter,
+                daemon=True,
+                name="HotwordDialogThread"
+            )
+            self.tk_thread.start()
+
+            # 等待 Tkinter 初始化完成
+            self._wait_for_ready()
+        else:
+            logger.info("macOS 不支持在子线程创建 Tkinter，热词对话框已禁用")
 
     def _wait_for_ready(self, timeout=5.0):
         """等待 Tkinter 线程准备就绪"""
@@ -169,6 +177,10 @@ class _HotwordDialogManager:
 
     def show_dialog(self) -> Optional[tuple]:
         """显示对话框"""
+        if not self.available:
+            logger.warning("当前平台不支持子线程 Tkinter，热词对话框已禁用")
+            return None
+
         self.request_queue.put(True)
 
         try:

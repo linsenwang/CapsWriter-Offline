@@ -177,6 +177,7 @@ class AudioRecorder:
                 
                 if task['type'] == 'begin':
                     self._start_time = task['time']
+                    self.state.last_audio_peak = 0.0
                     logger.debug(f"录音开始，时间戳: {self._start_time}")
                     
                 elif task['type'] == 'data':
@@ -200,6 +201,11 @@ class AudioRecorder:
                         self._cache.clear()
                     else:
                         data = task['data']
+                    
+                    # 记录原始输入峰值（用于识别为空时判断麦克风是否根本没采到声音）
+                    self.state.last_audio_peak = max(
+                        self.state.last_audio_peak, float(np.abs(data).max())
+                    )
                     
                     # 应用音频处理（增益/归一化）
                     data = self._process_audio(data)
@@ -231,6 +237,11 @@ class AudioRecorder:
                     if self._cache:
                         data = np.concatenate(self._cache)
                         self._cache.clear()
+                        
+                        # 记录原始输入峰值（用于识别为空时判断麦克风是否根本没采到声音）
+                        self.state.last_audio_peak = max(
+                            self.state.last_audio_peak, float(np.abs(data).max())
+                        )
                         
                         # 应用音频处理（增益/归一化）
                         data = self._process_audio(data)

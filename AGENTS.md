@@ -371,6 +371,18 @@ pm2 start ecosystem.config.js
 - 文档：[`docs/hammerspoon_udp_control.md`](docs/hammerspoon_udp_control.md)
 - **注意**：不要同时让 pynput 和 Hammerspoon 监听同一个鼠标键，会冲突
 
+**macOS 麦克风权限（重要）**：
+- macOS 只给 GUI 应用（Hammerspoon、终端等）授予麦克风权限，**由 launchd 服务（pm2、登录项）拉起的进程拿不到权限**，CoreAudio 会静默返回全 0 采样。表现就是提示「麦克风 XXX 完全没有采到声音，请检查设备」，但设备本身完全正常
+- 因此 macOS 上**不要把客户端挂到 pm2 / 开机启动项**，要在终端里运行 `core_client.py`，或交给 `~/.hammerspoon/lib/capswriter.lua` 自动拉起
+- 该脚本用 UDP `PING`/`PONG` 判断客户端是否可用，而不是只看 6018 是否被监听：进程卡死时端口还在，但不会回 PONG，脚本会先杀掉占端口的旧 `core_client.py` 再重新拉起
+- 脚本拉起客户端时会关闭 3~63 号继承 FD。`hs.execute` 拉起的子进程会继承 Hammerspoon 的全部 FD，包括它监听 6019 的状态 socket；不关掉的话，客户端会一直攥着这个端口，Hammerspoon 重载后状态监听绑不上，`处理中`/`完成` 弹窗就全丢了
+- 排查手法：换个父进程直接读设备电平（如 `python -c "import sounddevice as sd; ..."`）对比峰值，若终端里有声、pm2 里恒为 0，就是权限问题
+
+**macOS 上禁止在子线程创建 Tkinter（重要）**：
+- AppKit 要求窗口只能在主线程创建，子线程 `tk.Tk()` 会抛 `NSWindow should only be instantiated on the main thread!`；也可能不崩而是卡在 NSMenu 初始化等主线程，同时攥着 GIL，把整个客户端冻死——端口还在监听，但不再响应 UDP，表现就像「服务不可用」
+- 因此 `util/ui/toast_manager.py` 和 `util/ui/{context,hotword,rectify}_menu_handler.py` 在 Darwin 上直接禁用（`self.available = sys.platform != 'darwin'`，不启动 Tk 线程）。Toast 输出模式会自动降级为打字输出；三个对话框只从托盘菜单进入，而托盘在 macOS 上本来就关着
+- 今后新增任何 Tk 界面，都要遵守这条，或在 Darwin 上直接跳过
+
 ### 10.2 模型切换
 
 在 `config_server.py` 中修改 `model_type`：
@@ -390,6 +402,7 @@ pm2 start ecosystem.config.js
 
 | 时间 | 修改内容 |
 |------|---------|
+| 2026-11-12 | macOS 上禁用子线程 Tkinter（Toast 降级为打字输出，菜单对话框禁用），修复客户端整体冻结；Hammerspoon 脚本改用心跳判断并按需清理僵尸客户端；关闭 LLM（润色/翻译/小助理）与语音命令，只保留语音识别主链路 |
 | 2026-04-28 | 新增 Ollama 模型生命周期管理（服务启停自动加载/卸载）；默认模型切换为 gemma4:e4b；新增 AGENTS.md |
 | 2026-04-23 | 引入 Hammerspoon UDP 控制方案；重构 `configure_shortcuts.py`；粘贴模式修复输入法问题；SwiftBar 状态支持 |
 | 2026-04-23 | 新增 Qwen3-ASR-HF 后端（`util/qwen_asr_hf/`），支持 transformers / vLLM |
@@ -410,7 +423,7 @@ pm2 start ecosystem.config.js
 ### 11.2 Hammerspoon（macOS）
 
 - 配置文件路径：`~/.hammerspoon/lib/capswriter.lua`（不在本仓库内）
-- 功能：监听鼠标侧键，通过 UDP 控制录音
+- 功能：监听鼠标侧键，通过 UDP 控制录音；用 `PING`/`PONG` 心跳判断客户端是否真的活着（端口还在但进程卡死也能识别），必要时清理旧进程并重新拉起（macOS 上必须由 Hammerspoon 这类 GUI 应用启动客户端才有麦克风权限）
 - 详见 [`docs/hammerspoon_udp_control.md`](docs/hammerspoon_udp_control.md)
 
 ---

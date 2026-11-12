@@ -81,6 +81,9 @@ class ClientState:
 
     # 当前麦克风匹配的顺位（0 表示回退到了系统默认设备）
     current_mic_rank: int = 0
+
+    # 最近一次录音的原始输入峰值（0 表示麦克风完全没有采到声音，用于识别为空时提示）
+    last_audio_peak: float = 0.0
     
     # 定期刷新状态文件的异步任务
     _status_refresh_task: Optional[asyncio.Task] = None

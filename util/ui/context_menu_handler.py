@@ -7,6 +7,7 @@
 """
 
 import queue
+import sys
 import threading
 import tkinter as tk
 from typing import Optional
@@ -74,16 +75,23 @@ class _ContextDialogManager:
         self.root: Optional[tk.Tk] = None
         self.is_running = False
 
-        # 在独立线程中启动 Tkinter
-        self.tk_thread = threading.Thread(
-            target=self._run_tkinter,
-            daemon=True,
-            name="ContextDialogThread"
-        )
-        self.tk_thread.start()
+        # macOS 上 Tk 只能在主线程创建，子线程创建会崩溃或冻死整个客户端
+        self.available = sys.platform != 'darwin'
+        self.tk_thread: Optional[threading.Thread] = None
 
-        # 等待 Tkinter 初始化完成
-        self._wait_for_ready()
+        if self.available:
+            # 在独立线程中启动 Tkinter
+            self.tk_thread = threading.Thread(
+                target=self._run_tkinter,
+                daemon=True,
+                name="ContextDialogThread"
+            )
+            self.tk_thread.start()
+
+            # 等待 Tkinter 初始化完成
+            self._wait_for_ready()
+        else:
+            logger.info("macOS 不支持在子线程创建 Tkinter，上下文对话框已禁用")
 
     def _wait_for_ready(self, timeout=5.0):
         """等待 Tkinter 线程准备就绪"""
@@ -154,6 +162,10 @@ class _ContextDialogManager:
 
     def show_dialog(self, default_text: str = "") -> Optional[object]:
         """显示对话框"""
+        if not self.available:
+            logger.warning("当前平台不支持子线程 Tkinter，上下文对话框已禁用")
+            return None
+
         self.request_queue.put(default_text)
 
         try:

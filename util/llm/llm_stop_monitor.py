@@ -78,7 +78,11 @@ def on_stop_pressed():
 def start_monitor():
     """启动中断键监控（在模块导入时自动调用）"""
     global _hotkey_manager
-    
+
+    if not Config.llm_enabled:
+        logger.debug("LLM 已禁用，不注册中断键")
+        return
+
     try:
         from util.client.global_hotkey import get_global_hotkey_manager
         

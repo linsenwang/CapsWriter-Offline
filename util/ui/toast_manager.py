@@ -120,13 +120,22 @@ class ToastMessageManager:
         self.active_windows: List = []  # 运行时类型，避免循环导入
         self.root: Optional[tk.Tk] = None
 
-        # 在子线程中启动 Tkinter
-        self.manager_thread = threading.Thread(
-            target=self._run_manager,
-            daemon=True,
-            name="ToastManagerThread"
-        )
-        self.manager_thread.start()
+        # macOS 上 Tk 只能在主线程创建（子线程创建会触发 NSWindow 主线程断言，
+        # 轻则崩溃，重则卡住 GIL 把整个客户端冻死），而客户端主线程在跑 asyncio，
+        # 所以 macOS 上不启动 Tk 线程；调用方拿不到窗口时会自动降级为打字输出
+        self.available = sys.platform != 'darwin'
+        self.manager_thread: Optional[threading.Thread] = None
+
+        if self.available:
+            # 在子线程中启动 Tkinter
+            self.manager_thread = threading.Thread(
+                target=self._run_manager,
+                daemon=True,
+                name="ToastManagerThread"
+            )
+            self.manager_thread.start()
+        else:
+            logger.info("macOS 不支持在子线程创建 Tkinter，Toast 弹窗已禁用，降级为打字输出")
 
     def _run_manager(self) -> None:
         """在子线程中运行 Tkinter 主循环"""
@@ -289,6 +298,8 @@ class ToastMessageManager:
             窗口对象，如果超时则返回 None
         """
         import asyncio
+        if not self.available:
+            return None
         start = asyncio.get_event_loop().time()
         while asyncio.get_event_loop().time() - start < timeout:
             for window in self.active_windows:

@@ -75,6 +75,21 @@ M.config = {
 - 如果用户说"鼠标不好用"或"macOS 侧键没反应"，首先检查 `udp_control` 是否为 `True`，以及 `shortcuts` 中的鼠标键是否已禁用。
 - 不要同时让 pynput 和 Hammerspoon 监听同一个鼠标键，会冲突。
 
+**⚠️ macOS 麦克风权限（2026-10-10 补充，排查"没采到声音"必读）**：
+
+- macOS 只给 **GUI 应用**（Hammerspoon / 终端等）授予麦克风权限。**由 launchd 服务（pm2、开机启动项）拉起的进程拿不到权限**，CoreAudio 会静默返回全 0 采样。
+  典型现象：提示「麦克风 XXX 完全没有采到声音，请检查设备」，但设备本身完全正常（终端里同一设备能正常采音）。
+- 因此 macOS 上**不要把客户端挂到 pm2 / 开机启动项**。要么在终端里跑 `python core_client.py`，要么交给 `capswriter.lua` 自动拉起。
+- `capswriter.lua` 会在 Hammerspoon 启动/重载时、以及每次按键触发时，用 **UDP `PING` / `PONG` 心跳**判断客户端是否真的可用（不要只看端口：进程卡死时 6018 还在监听，但不会回包）；不回包就先用 `lsof` 找到占端口的 `core_client.py` 杀掉，再用 `hs.execute` 拉起并轮询等待就绪。相关配置在 `~/.hammerspoon/lib/config.lua` 的 `CapsWriterConfig`。
+- 拉起命令必须写成：
+  ```
+  (cd "工作目录" && exec 3>&- … 63>&- && exec "python" "脚本") >> "日志绝对路径" 2>&1 < /dev/null &
+  ```
+  三个坑：
+  1. `hs.execute` 会同步等待子进程的 stdout 管道关闭。若不把后台子进程的标准流全部接管，子 shell 会一直攥着管道，**Hammerspoon 主线程会永久卡死**（所有功能失效，`hs -c` 报 send/receive timeout）。
+  2. 对 `(...)` 的重定向是由**外层 shell 的工作目录**解析的，不受括号里的 `cd` 影响，所以日志路径必须用绝对路径，否则客户端根本起不来。
+  3. 子进程会**继承 Hammerspoon 的全部 FD**，包括 Hammerspoon 监听 `6019` 的状态 socket。不关掉的话客户端一直攥着这个端口，Hammerspoon 下次重载时新监听绑不上（`hs.socket` 绑定失败不报错，只返回 `localPort = 0` 的空 socket），`处理中`/`完成` 弹窗就全丢了。所以 exec 前要先关掉 3~63 号 FD。
+
 ---
 
 ## 二、输出系统
@@ -175,6 +190,38 @@ restore_clip = True          # 粘贴后是否恢复剪贴板原有内容
    - 修改 `util/client/state.py`：`start_recording()` / `stop_recording()` 写入 `status.json`
    - 修改 SwiftBar 插件：读取 `status.json` 显示录音时长和状态
 
+### 2026-10-10: macOS 麦克风权限导致"没采到声音" + Hammerspoon 自动拉起客户端
+
+**现象**：客户端一直提示「未识别：麦克风 External Microphone 完全没有采到声音，请检查设备」，但设备本身正常（终端里直接读同一设备电平正常）。
+
+**根因**：客户端当时由 **pm2** 托管，而 pm2 守护进程是开机时由 launchd（`~/Library/LaunchAgents/pm2.yangqian.plist`）拉起的，没有 GUI 应用身份，macOS 拒绝授予麦克风权限，CoreAudio 静默返回全 0 采样。
+
+**处理**：
+1. `pm2 delete capswriter` + `pm2 save`，客户端不再由 pm2 托管
+2. 改为由 Hammerspoon 负责自动拉起客户端（见 `docs/AGENTS.md` 第一节的 macOS 麦克风权限说明）
+3. 顺带修掉两个坑：`hs.execute` 的管道阻塞（会让 Hammerspoon 主线程卡死）、后台子进程重定向的日志路径必须用绝对路径
+
+### 2026-11-12: 客户端整体冻结 + 状态弹窗消失 + 子线程 Tkinter 崩溃
+
+**现象**：
+1. 按侧键没有反应，Hammerspoon 的「录音开始」照常弹出，但既没录音也没结果；
+2. 后来的修复过程中发现「处理中 / 润色 / 完成」这些状态弹窗全都没了，只剩 Hammerspoon 自己发的开始/结束提示。
+
+**根因**：
+1. 客户端进程卡死——所有线程都在等 GIL，其中一个线程卡在 `Tk_CreateConsoleWindow → NSMenu insertItem → NSOperation waitUntilFinished`。macOS 的 AppKit 要求窗口只能在**主线程**创建，`ToastMessageManager` / `*_menu_handler` 却在子线程里 `tk.Tk()`（触发点之一是 `llm_stop_monitor` 的 ESC 中断键回调），NSMenu 初始化要等主线程、主线程在 asyncio 里等 I/O，互相死等，且死等时攥着 GIL → 整个进程冻结。端口 6018 还在监听，所以 Hammerspoon 的 `lsof` 判定"已就绪"，`START` 全石沉大海。
+2. 状态弹窗消失：`hs.socket.udp.server(6019, …)` 绑定失败**不报错**，只返回一个 `localPort = 0` 的空 socket。当时 6019 被"客户端继承的 Hammerspoon FD"占着（见第一节坑 3），绑定静默失败，而代码把"拿到对象"当成"已启动"并保存下来，之后再也不会重试。
+
+**处理**：
+1. `util/ui/toast_manager.py`、`util/ui/{context,hotword,rectify}_menu_handler.py` 增加 `self.available = sys.platform != 'darwin'`，macOS 上不启动 Tk 线程；Toast 输出模式自动降级为打字输出，对话框只从托盘进入（托盘在 macOS 本来就关着）。
+2. `~/.hammerspoon/lib/capswriter.lua`：
+   - 就绪判断改成 UDP `PING`/`PONG` 心跳，并在拉起前杀掉占着 6018 的僵尸 `core_client.py`；
+   - 绑定状态端口后校验 `sock:info().localPort`，失败每 5 秒重试；
+   - 拉起客户端时关闭 3~63 号继承 FD；
+   - 加 `clientStarting` 闸门，避免并发拉起两个客户端。
+3. 排查手段记录：`lsof -nP -iUDP:6018` 看端口归属、`sample <pid> 2` 看线程栈、`python -c "import socket; … sendto(b'PING', ('127.0.0.1',6018))"` 验证客户端是否还有响应。
+4. `config_client.py` 关闭非核心功能：`llm_enabled = False`（不再初始化 LLM、不注册 ESC 中断键，识别结果直接输出，无润色/翻译/小助理）、清空 `voice_commands`。热词、标点、日记、录音保存、状态回传、空闲释放麦克风都保留。
+5. 顺带修掉 `capswriter.lua` 的一个老 bug：`hs.socket.udp:send` 必须显式传 host/port，只传消息会报 `argument 3 (expected string)`；原代码发送失败后仍把 `isRecording` 置真，导致之后所有按键被开头的 `if isRecording` 吞掉（侧键"没反应"）。现改为显式 host/port，且发送失败不置位。
+
 ---
 
 ## 六、常见故障排查速查
@@ -183,6 +230,10 @@ restore_clip = True          # 粘贴后是否恢复剪贴板原有内容
 |------|--------|
 | 鼠标侧键没反应 | `udp_control = True`？`shortcuts` 中鼠标键是否已禁用？Hammerspoon 是否 Reload Config？ |
 | Hammerspoon 提示录音开始但客户端没录 | `udp_control = True`？CapsWriter 是否已启动？防火墙是否拦截 UDP 6018？ |
+| **录音全程静音，提示「麦克风 XXX 完全没有采到声音」** | 客户端是不是被 pm2 / 开机启动项（launchd）拉起的？换成终端启动或让 Hammerspoon 拉起。用 `ps -o ppid= -p <客户端PID>` 看父进程，父进程是 launchd(1) 且不是终端起的 → 无麦克风权限 |
+| Hammerspoon 所有功能突然卡死、`hs -c` 超时 | 是不是用 `hs.execute` 起了长期后台进程且没重定向 stdout？管道不关闭会阻塞主线程 |
+| 侧键「录音开始」正常弹出，但没有识别结果 | 客户端是不是卡死了：`lsof -nP -iUDP:6018` 看端口在不在、`sample <pid> 2` 看线程栈；向 6018 发 `PING` 看有没有 `PONG` |
+| 「处理中 / 润色 / 完成」弹窗消失 | 6019 被谁占着？`lsof -nP -iUDP:6019` 应该只有 Hammerspoon。若被 `core_client.py` 占着，说明它继承了 Hammerspoon 的 FD，重启客户端即可 |
 | 中文输入法下英文输出变中文 | `paste = True`？`text_output.py` 的 `_is_english_text` 是否生效？ |
 | SwiftBar 不显示录音状态 | `status.json` 是否存在？CapsWriter 是否重启过（使 state.py 修改生效）？ |
 | 配置脚本保存后格式错乱 | `configure_shortcuts.py` 的 `write_shortcuts` 使用括号深度匹配，支持多行列表和注释 |
