@@ -30,20 +30,32 @@ def _has_english(text: str) -> bool:
 
 
 def _type_text(content: str) -> None:
-    """跨平台模拟打字"""
+    """跨平台模拟打字，分段检查中断，避免长回答打一半停不下来。"""
     content = TextOutput.sanitize_output(content)
+    if not content or should_stop():
+        return
+
+    chunk_size = 16
     if platform.system() == 'Windows':
         try:
             import keyboard
-            keyboard.write(content)
+            for i in range(0, len(content), chunk_size):
+                if should_stop():
+                    logger.info("LLM 打字输出已中断")
+                    return
+                keyboard.write(content[i:i + chunk_size])
             return
         except Exception as e:
             logger.warning(f"keyboard.write 失败，回退到 pynput: {e}")
-    
+
     # macOS / Linux / 回退
     try:
         controller = pynput_keyboard.Controller()
-        controller.type(content)
+        for i in range(0, len(content), chunk_size):
+            if should_stop():
+                logger.info("LLM 打字输出已中断")
+                return
+            controller.type(content[i:i + chunk_size])
     except Exception as e:
         logger.error(f"pynput 打字失败: {e}")
 
@@ -85,6 +97,7 @@ async def _process_paste(handler, role_config, content, matched_hotwords) -> tup
         handler.process, role_config, content, matched_hotwords, None, should_stop
     )
     if should_stop():
+        logger.info("LLM 输出已被中断，跳过粘贴")
         return ("", 0, 0.0)
 
     final_text = TextOutput.strip_punc(clean_llm_output(polished_text or content))
@@ -132,8 +145,9 @@ async def _streaming_inner(handler, role_config, content, matched_hotwords) -> t
         handler.process, role_config, content, matched_hotwords, collect_chunk, should_stop
     )
 
-    # 用户按 ESC 中断时，不把半截思考过程打出去
+    # 用户按 ESC 或开始新录音时，不把半截思考过程打出去
     if should_stop():
+        logger.info("LLM 输出已被中断，跳过打字")
         return ("", 0, 0.0)
 
     raw_text = polished_text or ''.join(chunks) or content

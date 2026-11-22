@@ -379,6 +379,10 @@ pm2 start ecosystem.config.js
 - Qwen3.5 的图片 token 按 32px patch 计费：`ceil(w/32) * ceil(h/32) + 2`，例如 1024×640 约 642，1024×1024 约 1026；日志会打印 `附图 tokens`
 - 截图里可能出现隐私内容；不需要时把角色配置改成 `enable_screenshot = False`，或在 Hammerspoon 配置里设 `screenshotEnabled = false`
 
+**LLM 输出中断**：
+- 开始新的录音（UDP `START` / 快捷键）会自动中断上一次还没结束的 LLM 输出；也可以按 `ESC`（`llm_stop_key`）或发送 UDP `CANCEL` / `STOP_LLM`
+- Ollama / OpenAI 流在 chunk 之间检查停止标志并关闭连接；缓冲后的打字按 16 字分段检查，避免长回答或卡住的请求阻塞下一条
+
 **macOS 麦克风权限（重要）**：
 - macOS 只给 GUI 应用（Hammerspoon、终端等）授予麦克风权限，**由 launchd 服务（pm2、登录项）拉起的进程拿不到权限**，CoreAudio 会静默返回全 0 采样。表现就是提示「麦克风 XXX 完全没有采到声音，请检查设备」，但设备本身完全正常
 - 因此 macOS 上**不要把客户端挂到 pm2 / 开机启动项**，要在终端里运行 `core_client.py`，或交给 `~/.hammerspoon/lib/capswriter.lua` 自动拉起

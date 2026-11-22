@@ -228,7 +228,12 @@ class LLMProcessor:
         should_stop_check: Optional[Callable[[], bool]]
     ) -> Tuple[str, int, float]:
         """专门处理 Ollama 原生流响应"""
-        
+
+        # 请求发出前就已被中断（例如用户已经开始下一次录音）
+        if should_stop_check and should_stop_check():
+            logger.info("LLM 输出在请求前已被中断")
+            return "", 0, 0.0
+
         # 1. 统一构建参数并提取 Ollama 选项
         params = self._build_request_params(role_config, messages)
         ollama_options = {
@@ -248,9 +253,15 @@ class LLMProcessor:
 
         # 3. 迭代处理
         full_response, total_tokens, generation_start_time = "", 0, None
-        
+        stopped = False
+
         for chunk in stream:
             if should_stop_check and should_stop_check():
+                stopped = True
+                try:
+                    stream.close()
+                except Exception:
+                    pass
                 break
 
             if hasattr(chunk, 'message') and chunk.message.content:
@@ -264,6 +275,9 @@ class LLMProcessor:
             if hasattr(chunk, 'done') and chunk.done:
                 total_tokens = getattr(chunk, 'eval_count', 0)
 
+        if stopped:
+            logger.info("LLM 流式输出已中断")
+
         generation_time = time.time() - generation_start_time if generation_start_time else 0.0
         return full_response.strip(), total_tokens, generation_time
 
@@ -275,7 +289,11 @@ class LLMProcessor:
         should_stop_check: Optional[Callable[[], bool]]
     ) -> Tuple[str, int, float]:
         """专门处理 OpenAI 兼容 API 流响应"""
-        
+
+        if should_stop_check and should_stop_check():
+            logger.info("LLM 输出在请求前已被中断")
+            return "", 0, 0.0
+
         # 排除 Ollama 专用的参数
         openai_params = {k: v for k, v in params.items() if k != 'num_predict'}
         openai_params['stream'] = True
@@ -283,9 +301,11 @@ class LLMProcessor:
         stream = client.chat.completions.create(**openai_params)
 
         full_response, total_tokens, generation_start_time = "", 0, None
+        stopped = False
 
         for chunk in stream:
             if should_stop_check and should_stop_check():
+                stopped = True
                 try: stream.close()
                 except: pass
                 break
@@ -300,6 +320,9 @@ class LLMProcessor:
 
             if hasattr(chunk, 'usage') and chunk.usage:
                 total_tokens = getattr(chunk.usage, 'completion_tokens', 0)
+
+        if stopped:
+            logger.info("LLM 流式输出已中断")
 
         generation_time = time.time() - generation_start_time if generation_start_time else 0.0
         return full_response.strip(), total_tokens, generation_time

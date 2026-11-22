@@ -65,6 +65,16 @@ class ShortcutTask:
 
     def launch(self) -> None:
         """启动录音任务"""
+        # 新录音开始时，先中断上一次还没结束的 LLM 输出，
+        # 避免奇怪的输出把处理循环卡住，必须等它结束才能处理下一条。
+        try:
+            from config_client import ClientConfig as Config
+            if Config.llm_enabled:
+                from util.llm.llm_stop_monitor import request_stop
+                request_stop("新的录音开始")
+        except Exception as e:
+            logger.debug(f"中断上一次 LLM 输出失败: {e}")
+
         self.state.update_activity()
 
         # 判断是否需要重新打开音频流：

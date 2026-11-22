@@ -59,10 +59,20 @@ def create_stop_callback() -> 'threading.Event':
     return stop_event
 
 
+def request_stop(reason: str = ""):
+    """请求中断当前 LLM 输出。
+
+    ESC 键、新的录音开始、UDP CANCEL 命令都会调用这里。
+    """
+    if reason:
+        logger.debug(f"请求中断 LLM 输出: {reason}")
+    _stop_event.set()
+
+
 def on_stop_pressed():
     """用户按下中断键时的回调"""
     logger.debug("检测到 ESC 键按下，停止 LLM 输出")
-    _stop_event.set()
+    request_stop("ESC")
 
     # 如果有 toast，关闭它
     try:

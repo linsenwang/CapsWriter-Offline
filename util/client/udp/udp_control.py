@@ -116,6 +116,13 @@ class UDPController:
                 logger.warning(f"UDP 控制：PING 响应失败: {e}")
             return
 
+        if command in ('CANCEL', 'STOP_LLM'):
+            # 外部工具（Hammerspoon 等）可以单独打断当前 LLM 输出，
+            # 不必等它自然结束。
+            from util.llm.llm_stop_monitor import request_stop
+            request_stop(f"UDP {command}")
+            return
+
         if command == 'START':
             # 如果麦克风因空闲被释放或设备发生变化，先重新打开音频流
             if state.stream is None and state.stream_manager:
