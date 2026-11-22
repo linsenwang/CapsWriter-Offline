@@ -373,7 +373,7 @@ pm2 start ecosystem.config.js
 - **注意**：不要同时让 pynput 和 Hammerspoon 监听同一个鼠标键，会冲突
 
 **聚焦窗口截图（LLM 视觉辅助）**：
-- `capswriter.lua` 在松开录音键时用 `hs.task` 异步调用 `screencapture -l <windowId>`，把截图和 `{app, title, ts, path}` 写到 `~/Library/Caches/CapsWriter/last_shot.{png,json}`
+- `capswriter.lua` 在**开始录音时（START）**用 `hs.task` 异步调用 `screencapture -l <windowId>`，把截图和 `{app, title, ts, path}` 写到 `~/Library/Caches/CapsWriter/last_shot.{png,json}`；截图与录音/ASR 并行，避免 STOP 后才开始抓图的额外延迟
 - 客户端 `util/tools/window_capture.py` 在录音结束时启动后台预取，提前读取并完成缩放/base64，与 ASR 处理重叠；LLM 请求直接取缓存（实测省约 0.075–0.15s）。文件过期或不存在时，回退到 Python 直接抓取前台窗口（需要屏幕录制权限）
 - 不要提前发 LLM 预热请求：实测 Ollama 不复用文本或图片前缀缓存，预热后真实请求的 `prompt_eval_duration` 仍约 347ms，反而多占一次模型推理
 - 角色配置 `enable_screenshot = True` 才会启用；`screenshot_max_edge` 控制长边像素（默认 1024，实测在保留代码术语的前提下约 1.2s；896 偶尔会把 `fun_asr_nano` 归一化成 `Fun-ASR-Nano`，1280 反而更慢且更容易忽略截图）。模型必须支持视觉输入

@@ -29,8 +29,9 @@ logger = get_logger('client')
 CACHE_DIR = Path.home() / 'Library' / 'Caches' / 'CapsWriter'
 HANDOFF_META = CACHE_DIR / 'last_shot.json'
 
-# 截图超过这个年龄就认为不是本次录音的，避免复用到上一次的图
-HANDOFF_MAX_AGE = 120.0
+# 截图超过这个年龄就认为不是本次录音的，避免复用到上一次的图。
+# 截图在 START 时抓，长录音可能持续几分钟，所以放宽到 5 分钟。
+HANDOFF_MAX_AGE = 300.0
 
 # 过小的图（窗口最小化、空白）直接丢弃
 MIN_WIDTH = 80
