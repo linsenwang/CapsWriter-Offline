@@ -31,6 +31,9 @@ class _CompatGlobalHotKeys(keyboard.GlobalHotKeys):
     def _on_press(self, key, injected=None):
         return super()._on_press(key, injected)
 
+    def _on_release(self, key, injected=None):
+        return super()._on_release(key, injected)
+
 
 class GlobalHotkeyManager:
     """
