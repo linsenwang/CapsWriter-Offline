@@ -18,7 +18,7 @@ import json
 from typing import List, Dict, Optional, Tuple, Any
 
 from util.llm.llm_role_config import RoleConfig
-from util.llm.llm_constants import estimate_tokens
+from util.llm.llm_constants import estimate_tokens, estimate_image_tokens
 from . import logger
 
 
@@ -75,6 +75,15 @@ class MessageBuilder:
                 raise
 
         image_b64, image_mime, image_meta = self._normalize_image(image_data)
+
+        # Qwen3.5 的图片按 32px patch 计费；没有尺寸信息时退回经验值 800
+        image_tokens = 0
+        if image_b64:
+            width = image_meta.get('width')
+            height = image_meta.get('height')
+            image_tokens = (
+                estimate_image_tokens(width, height) if width and height else 800
+            )
 
         messages = []
 
@@ -147,7 +156,9 @@ class MessageBuilder:
         )
 
         # 打印完整的上下文 JSON
-        self._debug_print_messages(role_config.name, role_config, messages)
+        self._debug_print_messages(
+            role_config.name, role_config, messages, image_tokens=image_tokens
+        )
 
         return messages
 
@@ -222,26 +233,16 @@ class MessageBuilder:
         self,
         role_name: str,
         role_config: RoleConfig,
-        messages: List[Dict]
+        messages: List[Dict],
+        image_tokens: int = 0,
     ):
         """打印调试信息（上下文统计和完整消息）"""
         try:
             # 计算上下文统计信息（多模态 content 是列表，需先抽文本）
             total_tokens = 0
-            has_image = False
             for msg in messages:
                 total_tokens += estimate_tokens(self._content_text(msg.get('content')))
-                if msg.get('images'):
-                    has_image = True
-                content = msg.get('content')
-                if isinstance(content, list) and any(
-                    isinstance(item, dict) and item.get('type') == 'image_url'
-                    for item in content
-                ):
-                    has_image = True
-            if has_image:
-                # 图片 token 粗估，避免上下文统计严重偏低
-                total_tokens += 800
+            total_tokens += image_tokens
 
             history_count = len([m for m in messages if m['role'] in ['user', 'assistant']])
             max_context = role_config.max_context_length
@@ -252,10 +253,14 @@ class MessageBuilder:
                 f"[LLM 请求] 角色: {role_name if role_name else '默认'}",
                 f"  上下文统计:",
                 f"    历史消息数: {history_count} 条",
+            ]
+            if image_tokens:
+                debug_msg.append(f"    附图 tokens: {image_tokens}")
+            debug_msg.extend([
                 f"    总 Token 数: {total_tokens} / {max_context} ({usage_percent:.1f}%)",
                 f"    剩余空间: {max_context - total_tokens} tokens",
-                f"    清理阈值: 80% (约 {int(max_context * 0.8)} tokens)"
-            ]
+                f"    清理阈值: 80% (约 {int(max_context * 0.8)} tokens)",
+            ])
 
             if usage_percent > 80:
                 debug_msg.append(f"    ⚠️  警告: 上下文超过 80%，已触发自动清理")
@@ -274,9 +279,10 @@ class MessageBuilder:
             info_msg = [
                 f"\n{'='*70}",
                 f"[LLM 请求] 角色: {role_name if role_name else '默认'}",
-                f"{content}",
-                f"{'='*70}\n"
             ]
+            if image_tokens:
+                info_msg.append(f"附图 tokens: {image_tokens}")
+            info_msg.extend([f"{content}", f"{'='*70}\n"])
             logger.info("\n".join(info_msg))
 
         except Exception as e:

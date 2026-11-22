@@ -91,6 +91,23 @@ class APIConfig:
     DEFAULT_TIMEOUT = 10.0
 
 
+# ==================== 图片 token 估算 ====================
+# 实测 Qwen3.5（Ollama）的视觉编码器按 32px patch 计费：
+#   图片 token ≈ ceil(width/32) * ceil(height/32) + 2
+# 例如 1024x640 = 32*20+2 = 642，1024x1024 = 32*32+2 = 1026。
+IMAGE_PATCH_SIZE = 32
+IMAGE_SPECIAL_TOKENS = 2
+
+
+def estimate_image_tokens(width: int, height: int) -> int:
+    """估算 Qwen3.5 视觉输入占用的 token 数。"""
+    if not width or not height:
+        return 0
+    cols = (int(width) + IMAGE_PATCH_SIZE - 1) // IMAGE_PATCH_SIZE
+    rows = (int(height) + IMAGE_PATCH_SIZE - 1) // IMAGE_PATCH_SIZE
+    return cols * rows + IMAGE_SPECIAL_TOKENS
+
+
 # ==================== Token 估算工具 ====================
 def estimate_tokens(text: str) -> int:
     """

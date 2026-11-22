@@ -234,6 +234,7 @@ restore_clip = True          # 粘贴后是否恢复剪贴板原有内容
 5. 新增 `util/debug/bench_screenshot_llm.py`，可对不同 `screenshot_max_edge` 跑同一段语音，统计编码耗时、模型耗时和术语命中数，方便换模型/换窗口后重新选值。
 6. 重新开启 `llm_enabled`；LLM 输出先缓冲，再由 `util/llm/llm_text_cleaner.py` 去掉「根据规则/当前文本/因此」这类过程性段落，换行替换为空格，并去掉常见 Markdown 标记，避免打字时把思考过程打出去或触发回车发送。
 7. 顺带修复新版 pynput 的 `GlobalHotKeys._on_press` 签名不兼容：macOS 后端只传 `key`，但方法需要 `injected`，用 `_CompatGlobalHotKeys` 补上可选参数，避免 ESC 中断键监听报 `TypeError`。
+8. 实测 Qwen3.5 图片 token 公式：`ceil(width/32) * ceil(height/32) + 2`。例如 1024×640≈642、1024×1024≈1026、896×560≈506；`MessageBuilder` 会按截图实际尺寸估算并在日志打印 `附图 tokens`，不再固定按 800 计算。
 
 **注意**：截图会随每次 LLM 处理发送到 Ollama 服务端，可能包含隐私内容；不需要时把角色配置改成 `enable_screenshot = False`，或在 Hammerspoon 配置里设 `screenshotEnabled = false`。
 

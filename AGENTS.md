@@ -376,6 +376,7 @@ pm2 start ecosystem.config.js
 - `capswriter.lua` 在松开录音键时用 `hs.task` 异步调用 `screencapture -l <windowId>`，把截图和 `{app, title, ts, path}` 写到 `~/Library/Caches/CapsWriter/last_shot.{png,json}`
 - 客户端 `util/tools/window_capture.py` 在下一次 LLM 处理时读取并删除这两个文件；文件过期或不存在时，回退到 Python 直接抓取前台窗口（需要屏幕录制权限）
 - 角色配置 `enable_screenshot = True` 才会启用；`screenshot_max_edge` 控制长边像素（默认 1024，实测在保留代码术语的前提下约 1.2s；896 偶尔会把 `fun_asr_nano` 归一化成 `Fun-ASR-Nano`，1280 反而更慢且更容易忽略截图）。模型必须支持视觉输入
+- Qwen3.5 的图片 token 按 32px patch 计费：`ceil(w/32) * ceil(h/32) + 2`，例如 1024×640 约 642，1024×1024 约 1026；日志会打印 `附图 tokens`
 - 截图里可能出现隐私内容；不需要时把角色配置改成 `enable_screenshot = False`，或在 Hammerspoon 配置里设 `screenshotEnabled = false`
 
 **macOS 麦克风权限（重要）**：
