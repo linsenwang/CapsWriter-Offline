@@ -236,6 +236,7 @@ restore_clip = True          # 粘贴后是否恢复剪贴板原有内容
 7. 顺带修复新版 pynput 的 `GlobalHotKeys._on_press` / `_on_release` 签名不兼容：macOS 后端只传 `key`，但方法需要 `injected`，用 `_CompatGlobalHotKeys` 补上可选参数，避免 ESC 中断键监听报 `TypeError`。
 8. 实测 Qwen3.5 图片 token 公式：`ceil(width/32) * ceil(height/32) + 2`。例如 1024×640≈642、1024×1024≈1026、896×560≈506；`MessageBuilder` 会按截图实际尺寸估算并在日志打印 `附图 tokens`，不再固定按 800 计算。
 9. 新增中断链路：开始新录音（`ShortcutTask.launch`）、按 `ESC`、或发送 UDP `CANCEL` / `STOP_LLM` 都会设置停止事件；Ollama/OpenAI 流在 chunk 间检查并关闭连接，缓冲后的打字按 16 字分段检查，避免长回答或卡住的请求阻塞下一条识别结果。
+10. 截图预取：`ShortcutTask.finish` 启动 `start_prefetch`，在 ASR 处理期间完成读图/缩放/base64；LLM 请求优先 `take_prefetched`。实测 973KB 原生截图现场编码约 75ms，预取后取用约 0ms。另测 Ollama 预热：纯文本和带图都一样，预热后真实请求的 `prompt_eval_duration` 仍约 347ms，说明没有跨请求前缀缓存，因此不采用提前发 LLM 请求的方案。
 
 **注意**：截图会随每次 LLM 处理发送到 Ollama 服务端，可能包含隐私内容；不需要时把角色配置改成 `enable_screenshot = False`，或在 Hammerspoon 配置里设 `screenshotEnabled = false`。
 

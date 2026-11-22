@@ -16,6 +16,7 @@ import json
 import platform
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Dict, Optional
@@ -35,8 +36,16 @@ HANDOFF_MAX_AGE = 120.0
 MIN_WIDTH = 80
 MIN_HEIGHT = 80
 
+# 截图读取/编码的串行锁，避免预取线程和主线程同时消费 last_shot 文件
+_capture_lock = threading.Lock()
 
-def capture_focused_window(
+# 预取缓存：{(timestamp, result)}，以及正在跑的预取线程
+_prefetch_lock = threading.Lock()
+_prefetch_thread: Optional[threading.Thread] = None
+_prefetched: Optional[tuple] = None
+
+
+def _capture_focused_window(
     max_edge: int = 1024,
     wait_for_handoff: float = 0.3,
 ) -> Optional[Dict[str, object]]:
@@ -70,6 +79,73 @@ def capture_focused_window(
         time.sleep(0.05)
 
     return _capture_live(max_edge)
+
+
+def capture_focused_window(
+    max_edge: int = 1024,
+    wait_for_handoff: float = 0.3,
+) -> Optional[Dict[str, object]]:
+    """获取当前聚焦窗口截图（串行化，避免预取线程和主线程竞争）。"""
+    with _capture_lock:
+        return _capture_focused_window(max_edge, wait_for_handoff)
+
+
+def _prefetch_worker(max_edge: int) -> None:
+    global _prefetched
+    result = capture_focused_window(max_edge=max_edge, wait_for_handoff=1.0)
+    with _prefetch_lock:
+        _prefetched = (time.time(), result)
+
+
+def start_prefetch(max_edge: int = 1024) -> None:
+    """在录音结束时提前读取/缩放截图。
+
+    这段编码耗时（约 0.1s）会与 ASR 处理重叠，不再等 LLM 请求时才做。
+    """
+    global _prefetch_thread
+    with _prefetch_lock:
+        if _prefetch_thread and _prefetch_thread.is_alive():
+            # 上一次预取还没结束，先让它跑完；新的 STOP 会写新的 handoff
+            return
+        _prefetch_thread = threading.Thread(
+            target=_prefetch_worker,
+            args=(max_edge,),
+            daemon=True,
+            name='ScreenshotPrefetch',
+        )
+        _prefetch_thread.start()
+
+
+def take_prefetched(
+    max_edge: int = 1024,
+    wait: float = 0.3,
+    max_age: float = 30.0,
+) -> Optional[Dict[str, object]]:
+    """取出预取结果；没有、失败或过期时返回 None。"""
+    global _prefetched
+    with _prefetch_lock:
+        thread = _prefetch_thread
+    if thread and thread.is_alive():
+        thread.join(timeout=wait)
+
+    with _prefetch_lock:
+        item = _prefetched
+        _prefetched = None
+
+    if not item:
+        return None
+
+    timestamp, result = item
+    if not result or time.time() - timestamp > max_age:
+        return None
+
+    width = result.get('width') or 0
+    height = result.get('height') or 0
+    if max_edge and max(width, height) > max_edge:
+        logger.debug(
+            f"预取截图长边 {max(width, height)} > 请求的 {max_edge}，继续使用预取图"
+        )
+    return result
 
 
 # ======================================================================

@@ -137,10 +137,14 @@ class LLMHandler:
         image_data = None
         if getattr(role_config, 'enable_screenshot', False):
             try:
-                from util.tools.window_capture import capture_focused_window
-                image_data = capture_focused_window(
-                    max_edge=getattr(role_config, 'screenshot_max_edge', 1024)
-                )
+                from util.tools.window_capture import capture_focused_window, take_prefetched
+                max_edge = getattr(role_config, 'screenshot_max_edge', 1024)
+                # 录音结束时已经预取过的话，这里直接拿现成的，省掉读图/缩放
+                image_data = take_prefetched(max_edge=max_edge)
+                if image_data is None:
+                    image_data = capture_focused_window(max_edge=max_edge)
+                else:
+                    logger.debug("使用预取的聚焦窗口截图")
             except Exception as e:
                 logger.warning(f"获取聚焦窗口截图失败，继续纯文本处理: {e}")
             if image_data is None:

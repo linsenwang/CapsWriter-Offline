@@ -141,6 +141,17 @@ class ShortcutTask:
         self.state.stop_recording()
         self._status.stop()
 
+        # 截图预取：在 ASR 处理期间提前读图/缩放，LLM 请求时直接取现成的
+        try:
+            from config_client import ClientConfig as Config
+            if Config.llm_enabled:
+                from LLM import default as default_role
+                if getattr(default_role, 'enable_screenshot', False):
+                    from util.tools.window_capture import start_prefetch
+                    start_prefetch(getattr(default_role, 'screenshot_max_edge', 1024))
+        except Exception as e:
+            logger.debug(f"截图预取启动失败: {e}")
+
         asyncio.run_coroutine_threadsafe(
             self.state.queue_in.put({
                 'type': 'finish',
