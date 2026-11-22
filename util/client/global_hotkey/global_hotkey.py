@@ -21,6 +21,16 @@ from pynput import keyboard
 from . import logger
 
 
+class _CompatGlobalHotKeys(keyboard.GlobalHotKeys):
+    """兼容新版 pynput。
+
+    macOS 后端调用 on_press 时只传 key，但新版 GlobalHotKeys._on_press
+    的签名是 (key, injected)，会抛 TypeError。这里把 injected 变成可选。
+    """
+
+    def _on_press(self, key, injected=None):
+        return super()._on_press(key, injected)
+
 
 class GlobalHotkeyManager:
     """
@@ -121,7 +131,7 @@ class GlobalHotkeyManager:
             return
         
         try:
-            self._listener = keyboard.GlobalHotKeys(self._hotkeys)
+            self._listener = _CompatGlobalHotKeys(self._hotkeys)
             self._listener.start()
             logger.debug(f"GlobalHotKeys 监听器已启动: {list(self._hotkeys.keys())}")
         except Exception as e:

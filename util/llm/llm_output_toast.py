@@ -64,20 +64,25 @@ async def handle_toast_mode(text: str, role_config=None, matched_hotwords=None, 
 
         chunks = []
         def stream_toast_chunk(chunk: str):
-            chunks.append(chunk)
-            toast_manager.update_toast(msg_id, ''.join(chunks))
+            if chunk:
+                chunks.append(chunk)
 
-        # 流式调用 LLM
+        # 调用 LLM；先缓冲完整输出，清理掉思考过程后再渲染
         polished_text, token_count, gen_time = await to_thread(
             handler.process, role_config, content, matched_hotwords, stream_toast_chunk, should_stop
         )
 
         if should_stop():
             toast_manager.close_toast(msg_id)
-            return (''.join(chunks) or content, token_count, gen_time)
-        else:
-            toast_manager.finish_toast(msg_id)
-            return (polished_text or content, token_count, gen_time)
+            return ('', 0, 0.0)
+
+        from util.llm.llm_text_cleaner import clean_llm_output
+        final_text = clean_llm_output(polished_text or ''.join(chunks) or content)
+        if not final_text:
+            final_text = TextOutput.strip_punc(content)
+        toast_manager.update_toast(msg_id, final_text)
+        toast_manager.finish_toast(msg_id)
+        return (TextOutput.strip_punc(final_text), token_count, gen_time)
 
     except Exception as e:
         if msg_id: toast_manager.close_toast(msg_id)

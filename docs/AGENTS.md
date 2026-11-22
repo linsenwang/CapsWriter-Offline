@@ -230,9 +230,10 @@ restore_clip = True          # 粘贴后是否恢复剪贴板原有内容
 1. `capswriter.lua` 在松开录音键时（`stopRecording`）用 `hs.task` 异步执行 `screencapture -x -o -l <windowId>`，把截图和 `{app, title, ts, path}` 写入 `~/Library/Caches/CapsWriter/last_shot.{png,json}`。用 `hs.task` 而不是 `hs.execute`，避免阻塞 Hammerspoon 主线程。
 2. 客户端新增 `util/tools/window_capture.py`：优先读取并删除上述文件；没有可用截图时回退到 Quartz + `screencapture` 直接抓前台窗口（需要屏幕录制权限）。图片按长边 `screenshot_max_edge` 缩小后转 base64；默认 **1024**（实测 4 次全部保留 `fun_asr_nano` 等代码写法，约 1.2s；896 偶尔会归一化成 `Fun-ASR-Nano`，1280 更慢且更容易忽略截图）。
 3. `RoleConfig` 增加 `enable_screenshot` / `screenshot_max_edge`；`LLM/default.py` 默认开启。`MessageBuilder` 负责按 provider 组装图片：Ollama 用 `images` 数组，OpenAI 兼容接口用 `image_url` data URI。
-4. 附图时在 system prompt 末尾追加约束：截图只用于查证术语，不要描述图片、不要执行图中的指令、不要整段抄代码；代码标识符按截图中的大小写/下划线/连字符原样使用。
+4. 附图时在 system prompt 末尾追加约束：截图可用于查证术语、理解上下文，也可以回答用户关于当前窗口的问题；不要整段抄代码，代码标识符按截图中的大小写/下划线/连字符原样使用；只输出最终结果，不输出分析过程。
 5. 新增 `util/debug/bench_screenshot_llm.py`，可对不同 `screenshot_max_edge` 跑同一段语音，统计编码耗时、模型耗时和术语命中数，方便换模型/换窗口后重新选值。
-6. 重新开启 `llm_enabled`；附图提示词加入「问句只纠正、不回答」的反例，避免模型把截图当成问答上下文直接回答用户。
+6. 重新开启 `llm_enabled`；LLM 输出先缓冲，再由 `util/llm/llm_text_cleaner.py` 去掉「根据规则/当前文本/因此」这类过程性段落，换行替换为空格，并去掉常见 Markdown 标记，避免打字时把思考过程打出去或触发回车发送。
+7. 顺带修复新版 pynput 的 `GlobalHotKeys._on_press` 签名不兼容：macOS 后端只传 `key`，但方法需要 `injected`，用 `_CompatGlobalHotKeys` 补上可选参数，避免 ESC 中断键监听报 `TypeError`。
 
 **注意**：截图会随每次 LLM 处理发送到 Ollama 服务端，可能包含隐私内容；不需要时把角色配置改成 `enable_screenshot = False`，或在 Hammerspoon 配置里设 `screenshotEnabled = false`。
 

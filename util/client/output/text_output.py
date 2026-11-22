@@ -59,7 +59,20 @@ class TextOutput:
             return text
         clean_text = re.sub(f"(?<=.)[{Config.trash_punc}]$", "", text)
         return clean_text
-    
+
+    @staticmethod
+    def sanitize_output(text: str) -> str:
+        """
+        把换行/回车替换为空格。
+
+        模拟打字时 `\\n` 会被 pynput 当成回车键发出，可能触发聊天窗口发送；
+        粘贴时也不希望把多行文本原样带进去。
+        """
+        if not text:
+            return text
+        text = text.replace('\r\n', ' ').replace('\r', ' ').replace('\n', ' ')
+        return re.sub(r'[ \t]+', ' ', text).strip()
+
     @staticmethod
     def has_english(text: str) -> bool:
         """
@@ -81,7 +94,9 @@ class TextOutput:
         """
         if not text:
             return
-        
+
+        text = self.sanitize_output(text)
+
         # 确定输出方式
         if paste is None:
             paste = Config.paste
@@ -124,6 +139,7 @@ class TextOutput:
         Args:
             text: 要粘贴的文本
         """
+        text = self.sanitize_output(text)
         logger.debug(f"使用粘贴方式输出文本，长度: {len(text)}")
         
         # 保存剪贴板
@@ -311,6 +327,7 @@ class TextOutput:
         Args:
             text: 要输出的文本
         """
+        text = self.sanitize_output(text)
         logger.debug(f"使用打字方式输出文本，长度: {len(text)}")
         
         if platform.system() == 'Windows':

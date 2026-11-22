@@ -2,8 +2,9 @@
 LLM Typing 输出模式
 
 直接打字输出，根据 paste 参数或 Config.paste 选择：
-- paste=True: 等流式输出完成后一次性粘贴
-- paste=False: 实时流式 write，每个字都打出来
+- paste=True: 等模型输出完成后，清理思考过程再一次性粘贴
+- paste=False: 等模型输出完成后，清理思考过程再统一打字
+  （不再边生成边打，避免把“根据规则……”这类分析过程打进输入框）
 """
 import asyncio
 import platform
@@ -15,6 +16,7 @@ from util.tools.asyncio_to_thread import to_thread
 from util.client.output.text_output import TextOutput, SWITCH_SETTLE_DELAY
 from util.client.clipboard import paste_text
 from util.llm.llm_stop_monitor import reset, should_stop
+from util.llm.llm_text_cleaner import clean_llm_output
 from . import logger
 
 
@@ -29,6 +31,7 @@ def _has_english(text: str) -> bool:
 
 def _type_text(content: str) -> None:
     """跨平台模拟打字"""
+    content = TextOutput.sanitize_output(content)
     if platform.system() == 'Windows':
         try:
             import keyboard
@@ -84,7 +87,9 @@ async def _process_paste(handler, role_config, content, matched_hotwords) -> tup
     if should_stop():
         return ("", 0, 0.0)
 
-    final_text = TextOutput.strip_punc(polished_text or content)
+    final_text = TextOutput.strip_punc(clean_llm_output(polished_text or content))
+    if not final_text:
+        final_text = TextOutput.strip_punc(content)
     await paste_text(final_text, restore_clipboard=Config.restore_clip)
     return (final_text, token_count, gen_time)
 
@@ -111,66 +116,39 @@ async def _process_streaming(handler, role_config, content, matched_hotwords) ->
 
 
 async def _streaming_inner(handler, role_config, content, matched_hotwords) -> tuple:
-    """流式打字输出主体逻辑（已在 _process_streaming 中完成输入法切换与恢复）"""
+    """收集完整输出，清理掉思考过程后再统一打字。
+
+    不再边生成边打字：模型偶尔会把“根据规则……因此……”的分析写进
+    content，实时打字会把这些过程一起打进输入框。先缓冲、清理，
+    再一次性输出，能保证只打最终文本。
+    """
     chunks = []
-    pending_buffer = ""
 
-    def stream_write_chunk(chunk: str):
-        nonlocal pending_buffer
-        if not chunk: return
-        chunks.append(chunk)
+    def collect_chunk(chunk: str):
+        if chunk:
+            chunks.append(chunk)
 
-        full_current = pending_buffer + chunk
-        content_to_write = full_current
-        trailing = ""
-        
-        # 从右向左寻找第一个非 trash 字符
-        for i in range(len(full_current) - 1, -1, -1):
-            char = full_current[i]
-            if char == '\n' or char in Config.trash_punc:
-                continue
-            else:
-                content_to_write = full_current[:i+1]
-                trailing = full_current[i+1:]
-                break
-        else:
-            content_to_write = ""
-            trailing = full_current
-
-        if content_to_write:
-            logger.debug(f"output_text: type '{content_to_write}'")
-            _type_text(content_to_write)
-            pending_buffer = trailing
-        else:
-            pending_buffer = trailing
-
-    # 执行流式处理
     polished_text, token_count, gen_time = await to_thread(
-        handler.process, role_config, content, matched_hotwords, stream_write_chunk, should_stop
+        handler.process, role_config, content, matched_hotwords, collect_chunk, should_stop
     )
 
-    # 阻塞，直到正常结束，或用户按下 ESC
+    # 用户按 ESC 中断时，不把半截思考过程打出去
     if should_stop():
-        final_text = TextOutput.strip_punc(''.join(chunks) or content)
-        return (final_text, 0, 0.0)
+        return ("", 0, 0.0)
 
-    # 如果模型没有任何输出，直接打出原文字
-    if not chunks:
+    raw_text = polished_text or ''.join(chunks) or content
+    final_text = TextOutput.strip_punc(clean_llm_output(raw_text))
+    if not final_text:
         final_text = TextOutput.strip_punc(content)
-        logger.debug(f"output_text: type '{final_text}' (降级)")
-        _type_text(final_text)
-        return (final_text, 0, 0.0)
-    
-    # 如果 LLM 只输出标点，会被拦截，就要做补偿输出
-    full_output = ''.join(chunks).strip()
-    if len(full_output) == 1 and full_output in Config.trash_punc:
-        _type_text(full_output)
-    
-    return (TextOutput.strip_punc(polished_text), token_count, gen_time)
+
+    logger.debug(f"output_text: type '{final_text}'")
+    _type_text(final_text)
+    return (final_text, token_count, gen_time)
 
 
 async def output_text(text: str, paste: bool = None):
     """输出文本（根据 paste 或 Config.paste 选择方式）"""
+    text = TextOutput.sanitize_output(text)
     if paste:
         await paste_text(text, restore_clipboard=Config.restore_clip)
         return
