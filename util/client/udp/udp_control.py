@@ -103,10 +103,15 @@ class UDPController:
         state.update_activity()
 
         if command == 'PING':
-            # 响应心跳检测，用于外部工具（如 Hammerspoon）判断客户端是否在线
+            # 响应心跳检测，并附带服务端地址，供 Hammerspoon 直接探测端口。
+            # 只回 PONG 的话，外部工具只能拿到 SSH 别名，nc 无法解析。
             try:
-                self._sock.sendto(b'PONG', addr)
-                logger.debug(f"UDP 控制：响应 PING (来自 {addr[0]}:{addr[1]})")
+                reply = f'PONG {Config.addr} {Config.port}'.encode('utf-8')
+                self._sock.sendto(reply, addr)
+                logger.debug(
+                    f"UDP 控制：响应 PING (来自 {addr[0]}:{addr[1]}) "
+                    f"-> {Config.addr}:{Config.port}"
+                )
             except Exception as e:
                 logger.warning(f"UDP 控制：PING 响应失败: {e}")
             return

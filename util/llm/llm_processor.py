@@ -202,10 +202,19 @@ class LLMProcessor:
             total_tokens = estimate_tokens(full_response)
             result = (full_response, total_tokens, generation_time)
 
-        # 更新历史
+        # 更新历史（多模态 content 是列表，只保留文本部分，不把图片塞进历史）
         if role_config.enable_history and context_manager:
-            context_manager.add_message('user', messages[-1]['content'])
-            context_manager.add_message('assistant', full_response)
+            user_content = messages[-1].get('content', '')
+            if isinstance(user_content, list):
+                user_content = "\n".join(
+                    str(item.get('text') or '')
+                    for item in user_content
+                    if isinstance(item, dict) and item.get('type') == 'text'
+                )
+            if user_content:
+                context_manager.add_message('user', user_content)
+            if full_response:
+                context_manager.add_message('assistant', full_response)
             logger.debug(f"已更新历史记录")
 
         return result

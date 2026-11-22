@@ -133,12 +133,26 @@ class LLMHandler:
         if context_manager:
             logger.debug(f"角色 '{role_name}' 启用历史，当前历史条数: {len(context_manager.history)}")
         
+        # 获取当前聚焦窗口截图（如果角色启用了视觉辅助）
+        image_data = None
+        if getattr(role_config, 'enable_screenshot', False):
+            try:
+                from util.tools.window_capture import capture_focused_window
+                image_data = capture_focused_window(
+                    max_edge=getattr(role_config, 'screenshot_max_edge', 1024)
+                )
+            except Exception as e:
+                logger.warning(f"获取聚焦窗口截图失败，继续纯文本处理: {e}")
+            if image_data is None:
+                logger.info("未获取到聚焦窗口截图，继续纯文本处理")
+
         # 获取选中文字（如果启用）
         selection_text = get_selected_text(role_config)
         
         # 构建消息
         messages = self.message_builder.build_messages(
             role_config, content, context_manager,
+            image_data=image_data,
             hotwords=matched_hotwords,
             selection_text=selection_text
         )

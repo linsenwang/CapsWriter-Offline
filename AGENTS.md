@@ -179,6 +179,7 @@ CapsWriter-Offline/
 4. **客户端后处理**：
    - 热词替换（RAG 音素匹配）→ 正则规则替换 → 繁体转换（可选）
    - LLM 润色（可选，按角色配置）→ 文本上屏（打字或粘贴）
+   - 角色开启 `enable_screenshot` 时，会把当前聚焦窗口截图一并交给支持视觉输入的模型，用于辅助纠正术语和同音字
 
 ### 4.3 通信协议
 
@@ -371,10 +372,17 @@ pm2 start ecosystem.config.js
 - 文档：[`docs/hammerspoon_udp_control.md`](docs/hammerspoon_udp_control.md)
 - **注意**：不要同时让 pynput 和 Hammerspoon 监听同一个鼠标键，会冲突
 
+**聚焦窗口截图（LLM 视觉辅助）**：
+- `capswriter.lua` 在松开录音键时用 `hs.task` 异步调用 `screencapture -l <windowId>`，把截图和 `{app, title, ts, path}` 写到 `~/Library/Caches/CapsWriter/last_shot.{png,json}`
+- 客户端 `util/tools/window_capture.py` 在下一次 LLM 处理时读取并删除这两个文件；文件过期或不存在时，回退到 Python 直接抓取前台窗口（需要屏幕录制权限）
+- 角色配置 `enable_screenshot = True` 才会启用；`screenshot_max_edge` 控制长边像素（默认 1024，实测在保留代码术语的前提下约 1.2s；896 偶尔会把 `fun_asr_nano` 归一化成 `Fun-ASR-Nano`，1280 反而更慢且更容易忽略截图）。模型必须支持视觉输入
+- 截图里可能出现隐私内容；不需要时把角色配置改成 `enable_screenshot = False`，或在 Hammerspoon 配置里设 `screenshotEnabled = false`
+
 **macOS 麦克风权限（重要）**：
 - macOS 只给 GUI 应用（Hammerspoon、终端等）授予麦克风权限，**由 launchd 服务（pm2、登录项）拉起的进程拿不到权限**，CoreAudio 会静默返回全 0 采样。表现就是提示「麦克风 XXX 完全没有采到声音，请检查设备」，但设备本身完全正常
 - 因此 macOS 上**不要把客户端挂到 pm2 / 开机启动项**，要在终端里运行 `core_client.py`，或交给 `~/.hammerspoon/lib/capswriter.lua` 自动拉起
 - 该脚本用 UDP `PING`/`PONG` 判断客户端是否可用，而不是只看 6018 是否被监听：进程卡死时端口还在，但不会回 PONG，脚本会先杀掉占端口的旧 `core_client.py` 再重新拉起
+- PONG 现在会带服务端地址（`PONG <addr> <port>`），Hammerspoon 用它给 `nc` 探测远端端口。不能直接把 SSH 别名（如 `rmsh`）传给 `nc`——`nc` 不读 `~/.ssh/config`，会误判为不可达，导致每次缓存过期后的第一次触发都提示「未就绪」并白等一次远程唤醒
 - 脚本拉起客户端时会关闭 3~63 号继承 FD。`hs.execute` 拉起的子进程会继承 Hammerspoon 的全部 FD，包括它监听 6019 的状态 socket；不关掉的话，客户端会一直攥着这个端口，Hammerspoon 重载后状态监听绑不上，`处理中`/`完成` 弹窗就全丢了
 - 排查手法：换个父进程直接读设备电平（如 `python -c "import sounddevice as sd; ..."`）对比峰值，若终端里有声、pm2 里恒为 0，就是权限问题
 
@@ -402,6 +410,8 @@ pm2 start ecosystem.config.js
 
 | 时间 | 修改内容 |
 |------|---------|
+| 2026-11-22 | 新增聚焦窗口截图辅助 LLM 后处理：Hammerspoon 在录音结束时截图，客户端通过 `enable_screenshot` 附图给支持视觉的模型（默认角色已开启）；重新开启 `llm_enabled`，并修复远程端口探测误报「未就绪」 |
+| 2026-11-14 | 新增自适应响度补偿（`audio_agc`，短时 RMS + dB 域平滑），客户端麦克风与文件转录默认启用，替代写死的固定增益 |
 | 2026-11-12 | macOS 上禁用子线程 Tkinter（Toast 降级为打字输出，菜单对话框禁用），修复客户端整体冻结；Hammerspoon 脚本改用心跳判断并按需清理僵尸客户端；关闭 LLM（润色/翻译/小助理）与语音命令，只保留语音识别主链路 |
 | 2026-04-28 | 新增 Ollama 模型生命周期管理（服务启停自动加载/卸载）；默认模型切换为 gemma4:e4b；新增 AGENTS.md |
 | 2026-04-23 | 引入 Hammerspoon UDP 控制方案；重构 `configure_shortcuts.py`；粘贴模式修复输入法问题；SwiftBar 状态支持 |

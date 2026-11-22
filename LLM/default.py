@@ -24,6 +24,8 @@ enable_thinking = False                 # 是否启用思考（仅 Ollama）
 enable_history = False                  # 是否保留对话历史
 enable_read_selection = False           # 是否启用获取选中文字（通过 Ctrl+C）
 selection_max_length = 1024             # 选中文字最大长度
+enable_screenshot = True                # 是否附带当前聚焦窗口截图（需模型支持视觉输入）
+screenshot_max_edge = 1024              # 截图长边最大像素（0 表示不缩小）
 
 # ==================== 输出配置 ====================
 output_mode = 'typing'                  # 输出方式：'typing' 直接打字, 'toast' 浮动窗口

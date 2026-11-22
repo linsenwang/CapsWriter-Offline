@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Optional
 from config_client import ClientConfig as Config
 from util.client.state import console
 from util.client.websocket_manager import WebSocketManager
-from util.client.audio.processing import apply_audio_gain
+from util.client.audio.processing import apply_audio_gain, create_agc
 from .media_tool import MediaTool
 from .result_handler import ResultHandler
 from . import logger
@@ -96,6 +96,8 @@ class FileTranscriber:
             # 分块大小：1分钟音频 (16000 * 4 * 60 bytes)
             chunk_size = 16000 * 4 * 60
             bytes_sent = 0
+            # 自适应响度补偿（整段文件共用一份平滑状态）
+            agc = create_agc(16000) if getattr(Config, 'audio_agc', False) else None
             
             while True:
                 data = await process.stdout.read(chunk_size)
@@ -110,14 +112,17 @@ class FileTranscriber:
                     prog_str = f'    发送进度：{progress:.2f}s'
                 console.print(prog_str, end='\r')
 
-                # 应用音频处理（峰值归一化或固定增益，含软限幅防止削波失真）
+                # 应用音频处理（AGC / 峰值归一化 / 固定增益，含软限幅防止削波失真）
                 audio_array = np.frombuffer(data, dtype=np.float32)
-                processed = apply_audio_gain(
-                    audio_array,
-                    normalize=Config.audio_normalize,
-                    normalize_target=Config.audio_normalize_target,
-                    gain=Config.audio_gain,
-                )
+                if agc is not None:
+                    processed = agc.process(audio_array)
+                else:
+                    processed = apply_audio_gain(
+                        audio_array,
+                        normalize=Config.audio_normalize,
+                        normalize_target=Config.audio_normalize_target,
+                        gain=Config.audio_gain,
+                    )
                 data = processed.tobytes()
 
                 message = {

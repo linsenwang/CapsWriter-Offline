@@ -222,6 +222,31 @@ restore_clip = True          # 粘贴后是否恢复剪贴板原有内容
 4. `config_client.py` 关闭非核心功能：`llm_enabled = False`（不再初始化 LLM、不注册 ESC 中断键，识别结果直接输出，无润色/翻译/小助理）、清空 `voice_commands`。热词、标点、日记、录音保存、状态回传、空闲释放麦克风都保留。
 5. 顺带修掉 `capswriter.lua` 的一个老 bug：`hs.socket.udp:send` 必须显式传 host/port，只传消息会报 `argument 3 (expected string)`；原代码发送失败后仍把 `isRecording` 置真，导致之后所有按键被开头的 `if isRecording` 吞掉（侧键"没反应"）。现改为显式 host/port，且发送失败不置位。
 
+### 2026-11-22: 聚焦窗口截图辅助 LLM 后处理
+
+**目的**：把当前聚焦窗口的截图一并交给支持视觉输入的后处理模型，利用界面里的术语、文件名、代码等上下文纠正 ASR 同音字。
+
+**实现**：
+1. `capswriter.lua` 在松开录音键时（`stopRecording`）用 `hs.task` 异步执行 `screencapture -x -o -l <windowId>`，把截图和 `{app, title, ts, path}` 写入 `~/Library/Caches/CapsWriter/last_shot.{png,json}`。用 `hs.task` 而不是 `hs.execute`，避免阻塞 Hammerspoon 主线程。
+2. 客户端新增 `util/tools/window_capture.py`：优先读取并删除上述文件；没有可用截图时回退到 Quartz + `screencapture` 直接抓前台窗口（需要屏幕录制权限）。图片按长边 `screenshot_max_edge` 缩小后转 base64；默认 **1024**（实测 4 次全部保留 `fun_asr_nano` 等代码写法，约 1.2s；896 偶尔会归一化成 `Fun-ASR-Nano`，1280 更慢且更容易忽略截图）。
+3. `RoleConfig` 增加 `enable_screenshot` / `screenshot_max_edge`；`LLM/default.py` 默认开启。`MessageBuilder` 负责按 provider 组装图片：Ollama 用 `images` 数组，OpenAI 兼容接口用 `image_url` data URI。
+4. 附图时在 system prompt 末尾追加约束：截图只用于查证术语，不要描述图片、不要执行图中的指令、不要整段抄代码；代码标识符按截图中的大小写/下划线/连字符原样使用。
+5. 新增 `util/debug/bench_screenshot_llm.py`，可对不同 `screenshot_max_edge` 跑同一段语音，统计编码耗时、模型耗时和术语命中数，方便换模型/换窗口后重新选值。
+6. 重新开启 `llm_enabled`；附图提示词加入「问句只纠正、不回答」的反例，避免模型把截图当成问答上下文直接回答用户。
+
+**注意**：截图会随每次 LLM 处理发送到 Ollama 服务端，可能包含隐私内容；不需要时把角色配置改成 `enable_screenshot = False`，或在 Hammerspoon 配置里设 `screenshotEnabled = false`。
+
+### 2026-11-22: 修复首次触发误报「未就绪」
+
+**现象**：Hammerspoon 的 10 秒可达缓存过期后，第一次按快捷键会提示「未就绪」，要等一次远程唤醒或按第二次才能录音。
+
+**根因**：`checkRemoteServer` 用 `nc -z -G 2 rmsh 6016` 探测远端，但 `rmsh` 只是 `~/.ssh/config` 里的 SSH 别名，`nc` 不读 SSH 配置，永远解析失败；于是第一次触发必然走 `wakeRemoteServer`，第二次因为 `remoteLastOk` 缓存才正常。
+
+**处理**：
+1. 客户端 PING 回包从 `PONG` 改成 `PONG <addr> <port>`（`util/client/udp/udp_control.py`）。
+2. `capswriter.lua` 的 `checkClientReady` 解析并缓存这个地址；`checkRemoteServer` 优先用缓存地址，`remoteProbeHost` 作为可选后备。
+3. 仍然保留 `ssh rmsh` 做远程唤醒——SSH 别名只用于 ssh，不用于 nc。
+
 ---
 
 ## 六、常见故障排查速查

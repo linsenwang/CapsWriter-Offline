@@ -45,7 +45,7 @@ class ClientConfig:
     hot_rectify = 0.6           # 纠错历史 RAG 匹配阈值（低阈值，用于 LLM 上下文）
     hot_rule = True             # 是否启用自定义规则替换（基于正则表达式）
 
-    llm_enabled = False         # 是否启用 LLM 润色功能，需要配置 LLM/ 目录下的角色文件
+    llm_enabled = True          # 是否启用 LLM 润色功能，需要配置 LLM/ 目录下的角色文件
     llm_stop_key = 'esc'        # 中断 LLM 输出的快捷键（llm_enabled=False 时不注册）
 
     enable_tray = True          # 客户端默认启用托盘图标功能
@@ -56,6 +56,17 @@ class ClientConfig:
     audio_gain = 20.0            # 全局默认固定增益系数（1.0=原样，>1.0=放大，<1.0=衰减）
     audio_normalize = False      # 是否启用峰值归一化（自动将每段音频的最大振幅调整到接近满幅但不过曝）。启用时会忽略 audio_gain 的固定值
     audio_normalize_target = 0.95  # 峰值归一化的目标振幅（建议 0.9~0.99，留一点 headroom 防止削波）
+
+    # 自适应响度补偿（AGC）：按每块音频的平均电平（RMS）自动调整增益，推荐开启。
+    # 启用后忽略 audio_gain、mic_devices 里的 gain、default_device_gain 等固定增益。
+    # 优先级：audio_agc > audio_normalize > 固定增益。
+    audio_agc = True                # 是否启用自适应响度补偿
+    audio_agc_target_db = -20.0     # 目标平均电平（dBFS RMS），-20 约等于满幅的 10%，-18~-24 都合适
+    audio_agc_max_gain_db = 30.0    # 最大放大 30dB（约 31.6 倍），防止把底噪一起抬上来
+    audio_agc_min_gain_db = -12.0   # 最大衰减 12dB（约 0.25 倍），防止大音量爆音
+    audio_agc_gate_db = -55.0       # 静音门限：低于此电平的块只沿用当前增益、不更新增益
+    audio_agc_attack = 0.15         # 增益下降的时间常数（秒），越小越能压住突然的爆音
+    audio_agc_release = 2.5         # 增益回升的时间常数（秒），越大音量越稳、适应越慢
 
     # 按麦克风设备名称（部分匹配）单独设置增益，优先级高于 audio_gain。
     # 键为设备名称片段（不区分大小写），值为增益系数。

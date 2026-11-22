@@ -13,6 +13,7 @@
 - hot_sub_*: 热词替换工具
 - srt_from_txt: SRT 字幕生成
 - window_detector: 窗口检测
+- window_capture: 当前聚焦窗口截图（供 LLM 视觉辅助）
 """
 
 from util.tools.asyncio_to_thread import to_thread

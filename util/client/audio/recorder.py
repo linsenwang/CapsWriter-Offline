@@ -20,7 +20,7 @@ import websockets
 from config_client import ClientConfig as Config
 from util.client.state import console
 from util.client.audio.file_manager import AudioFileManager
-from util.client.audio.processing import apply_audio_gain
+from util.client.audio.processing import apply_audio_gain, create_agc
 from . import logger
 
 if TYPE_CHECKING:
@@ -52,6 +52,8 @@ class AudioRecorder:
         self._start_time: float = 0.0
         self._duration: float = 0.0
         self._cache: list = []
+        # 自适应响度补偿（启用 audio_agc 时代替固定增益）
+        self._agc = create_agc(48000)
         # 限制并发发送任务数量，防止 WebSocket 阻塞时 task 无限累积
         self._send_semaphore = asyncio.Semaphore(8)
     
@@ -103,7 +105,9 @@ class AudioRecorder:
         return Config.audio_gain
 
     def _process_audio(self, audio_data: np.ndarray) -> np.ndarray:
-        """对音频数据应用增益或峰值归一化（含软限幅防止削波失真）"""
+        """对音频数据应用响度补偿（AGC / 峰值归一化 / 固定增益，含软限幅）"""
+        if getattr(Config, 'audio_agc', False):
+            return self._agc.process(audio_data)
         gain = self._resolve_gain()
         return apply_audio_gain(
             audio_data,
@@ -165,6 +169,7 @@ class AudioRecorder:
             self._start_time = 0.0
             self._duration = 0.0
             self._cache = []
+            self._agc.reset()
             
             # 音频文件管理
             file_path = None
@@ -273,6 +278,11 @@ class AudioRecorder:
                     console.print(f'任务标识：{self.task_id}')
                     console.print(f'    录音时长：{self._duration:.2f}s')
                     logger.info(f"录音任务完成，任务ID: {self.task_id}, 时长: {self._duration:.2f}s")
+                    if getattr(Config, 'audio_agc', False):
+                        logger.debug(
+                            f"AGC 结束增益: {self._agc.gain_db:.1f} dB "
+                            f"({self._agc.gain:.2f}x)"
+                        )
                     
                     # 告诉服务端音频片段结束了
                     message = {

@@ -32,6 +32,8 @@ enable_hotwords: bool = False                # 是否读取潜在热词列表
 enable_rectify: bool = False                 # 是否读取潜在纠错记录
 enable_read_selection: bool = False          # 是否读取鼠标所选文字（通过 Ctrl+C）
 selection_max_length: int = 1000             # 选中文字最大长度
+enable_screenshot: bool = False              # 是否附带当前聚焦窗口截图（需模型支持视觉输入）
+screenshot_max_edge: int = 1024              # 截图长边最大像素（0 表示不缩小）
 
 # 输出配置
 output_mode: str = 'typing'                  # 输出方式: 'typing' 或 'toast' (即打字输出或弹窗输出)
