@@ -233,7 +233,7 @@ restore_clip = True          # 粘贴后是否恢复剪贴板原有内容
 4. 附图时在 system prompt 末尾追加约束：截图可用于查证术语、理解上下文，也可以回答用户关于当前窗口的问题；不要整段抄代码，代码标识符按截图中的大小写/下划线/连字符原样使用；只输出最终结果，不输出分析过程。
 5. 新增 `util/debug/bench_screenshot_llm.py`，可对不同 `screenshot_max_edge` 跑同一段语音，统计编码耗时、模型耗时和术语命中数，方便换模型/换窗口后重新选值。
 6. 重新开启 `llm_enabled`；LLM 输出先缓冲，再由 `util/llm/llm_text_cleaner.py` 去掉「根据规则/当前文本/因此」这类过程性段落，换行替换为空格，并去掉常见 Markdown 标记，避免打字时把思考过程打出去或触发回车发送。
-7. 顺带修复新版 pynput 的 `GlobalHotKeys._on_press` 签名不兼容：macOS 后端只传 `key`，但方法需要 `injected`，用 `_CompatGlobalHotKeys` 补上可选参数，避免 ESC 中断键监听报 `TypeError`。
+7. 顺带修复新版 pynput 的 `GlobalHotKeys._on_press` / `_on_release` 签名不兼容：macOS 后端只传 `key`，但方法需要 `injected`，用 `_CompatGlobalHotKeys` 补上可选参数，避免 ESC 中断键监听报 `TypeError`。
 8. 实测 Qwen3.5 图片 token 公式：`ceil(width/32) * ceil(height/32) + 2`。例如 1024×640≈642、1024×1024≈1026、896×560≈506；`MessageBuilder` 会按截图实际尺寸估算并在日志打印 `附图 tokens`，不再固定按 800 计算。
 9. 新增中断链路：开始新录音（`ShortcutTask.launch`）、按 `ESC`、或发送 UDP `CANCEL` / `STOP_LLM` 都会设置停止事件；Ollama/OpenAI 流在 chunk 间检查并关闭连接，缓冲后的打字按 16 字分段检查，避免长回答或卡住的请求阻塞下一条识别结果。
 
